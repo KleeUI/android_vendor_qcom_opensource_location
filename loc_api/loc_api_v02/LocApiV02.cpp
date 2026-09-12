@@ -8904,6 +8904,25 @@ void LocApiV02::configRobustLocation
     }));
 }
 
+// Vendor SM8450 location clients released before the Robust Location app-hash
+// extension call the original three-argument LocApiV02 entry point.  The
+// fourth argument was added to carry the enableForE911 validity bit, which
+// changed the C++ symbol while leaving those clients otherwise compatible.
+// Export a narrow ABI thunk instead of weakening ELF validation or changing
+// the LocApiV02 vtable layout.  The legacy API always encoded the E911 field
+// as valid, so preserve that behavior when forwarding to the current method.
+extern "C" __attribute__((visibility("default")))
+void locApiV02ConfigRobustLocationCompat(
+        LocApiV02* api, bool enable, bool enableForE911,
+        LocApiResponse* adapterResponse)
+        __asm__("_ZN9LocApiV0220configRobustLocationEbbPN8loc_core14LocApiResponseE");
+
+extern "C" void locApiV02ConfigRobustLocationCompat(
+        LocApiV02* api, bool enable, bool enableForE911,
+        LocApiResponse* adapterResponse) {
+    api->configRobustLocation(enable, enableForE911, adapterResponse, true);
+}
+
 void LocApiV02 :: getRobustLocationConfig(uint32_t sessionId, LocApiResponse *adapterResponse)
 {
     sendMsg(new LocApiMsg([this, sessionId, adapterResponse] () {
