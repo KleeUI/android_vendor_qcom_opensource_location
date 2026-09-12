@@ -1,6 +1,5 @@
-
 cc_library_shared {
-    name: "libsynergy_loc_api",
+    name: "libloc_socket",
     defaults: ["qtilocationopensrc_common_defaults"],
     vendor: true,
     compile_multilib: "64",
@@ -10,34 +9,22 @@ cc_library_shared {
         "-D_ANDROID_",
     ] + GNSS_CFLAGS,
 
-    srcs: ["SynergyLocApi.cpp"],
+    srcs: ["LocSocket.cpp"],
 
     shared_libs: [
         "libutils",
         "libcutils",
-        "//vendor/xiaomi/sm8450-common:libqmi_cci",
-        "//vendor/xiaomi/sm8450-common:libqmi_common_so",
-        "libloc_core",
-        "libgps.utils",
-        "libdl",
         "liblog",
+        "libgps.utils",
     ],
 
     header_libs: [
         "libloc_core_headers",
         "libgps.utils_headers",
         "libloc_pla_headers",
-        "loc_sll_if_headers",
         "liblocation_api_headers",
         "klee_location_qmi_headers",
     ],
 
     export_include_dirs: ["."],
-}
-
-cc_library_headers {
-
-    name: "libsynergyloc_api_headers",
-    export_include_dirs: ["."],
-    vendor: true,
 }

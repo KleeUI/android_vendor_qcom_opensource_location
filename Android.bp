@@ -1,3 +1,9 @@
+cc_library_headers {
+    name: "klee_location_qmi_headers",
+    vendor: true,
+    export_include_dirs: ["qmi_compat"],
+}
+
 GNSS_CFLAGS = [
     "-Werror",
     "-Wformat",
