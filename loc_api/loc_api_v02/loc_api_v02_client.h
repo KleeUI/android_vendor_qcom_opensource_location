@@ -29,7 +29,7 @@
 /*
 Changes from Qualcomm Innovation Center are provided under the following license:
 
-Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
 modification, are permitted (subject to the limitations in the
@@ -868,18 +868,6 @@ typedef union
     /*QMI_LOC_INJECT_RAW_DATA_REQ_V02*/
     const qmiLocSetTribandStateReqMsgT_v02 *pSetTribandStateReq;
     /*QMI_LOC_SET_TRIBAND_STATE_REQ_V02*/
-
-    const qmiLocSetSdkFeatureConfigReqMsgT_v02
-            *pLocSetSdkFeatureConfigReq;
-    const qmiLocOsnmaPublicKeyMerkleTreeReqMsgT_v02
-            *pOsnmaPublicKeyMerkleTreeReq;
-    /*QMI_LOC_OSNMA_PUBLIC_KEY_MERKLE_TREE_REQ_V02*/
-    const qmiLocSetOsnmaStateReqMsgT_v02
-            *pOsnmaEnablementReq;
-    /*QMI_LOC_OSNMA_ENABLEMENT_REQ_V02*/
-    const qmiLocSetNtnStatusReqMsgT_v02
-            *pSetNtnStatusReq;
-    /*QMI_LOC_SET_NTN_STATUS_REQ_V02*/
 }locClientReqUnionType;
 
 
@@ -1228,13 +1216,6 @@ typedef union
    const qmiLocEventDcReportIndMsgT_v02* pDcReportIndMsg;
    /** Sent by the engine to inform disaster and crisis report
     QMI_LOC_EVENT_DC_REPORT_IND_V02 */
-
-   const qmiLocGnssBandsSupportedIndMsgT_v02* pGnssBandsSupportedIndMsg;
-   /** Sent by the engine to inform the supported bands and the preferred one
-    QMI_LOC_GNSS_BANDS_SUPPORTED_IND_V02 */
-   const qmiLocNtnConfigUpdateIndMsgT_v02* pNtnConfigUpdateIndMsg;
-   /** Sent by the engine to inform the NTN config upodate event
-    QMI_LOC_NTN_CONFIG_UPDATE_IND_V02 */
 }locClientEventIndUnionType;
 
 
@@ -1725,10 +1706,6 @@ typedef union
     const qmiLocInjectPlatformPowerStateIndMsgT_v02 *pInjectPlatformPowerStateInd;
     /* QMI_LOC_INJECT_PLATFORM_POWER_STATE_IND_V02 */
 
-    const qmiLocSetNtnStatusIndMsgT_v02 *pSetNtnStatusInd;
-    /* QMI_LOC_SET_NTN_STATUS_IND_V02 */
-    const qmiLocGetNtnStatusIndMsgT_v02 *pGetNtnStatusInd;
-    /* QMI_LOC_GET_NTN_STATUS_IND_V02 */
 }locClientRespIndUnionType;
 
 /** @} */ /* end_addtogroup data_types */

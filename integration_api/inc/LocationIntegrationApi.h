@@ -25,50 +25,20 @@
  * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
-/*
-Changes from Qualcomm Innovation Center are provided under the following license:
-Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
-
-Redistribution and use in source and binary forms, with or without
-modification, are permitted (subject to the limitations in the
-disclaimer below) provided that the following conditions are met:
-
-    * Redistributions of source code must retain the above copyright
-      notice, this list of conditions and the following disclaimer.
-
-    * Redistributions in binary form must reproduce the above
-      copyright notice, this list of conditions and the following
-      disclaimer in the documentation and/or other materials provided
-      with the distribution.
-
-    * Neither the name of Qualcomm Innovation Center, Inc. nor the names of its
-      contributors may be used to endorse or promote products derived
-      from this software without specific prior written permission.
-
-NO EXPRESS OR IMPLIED LICENSES TO ANY PARTY'S PATENT RIGHTS ARE
-GRANTED BY THIS LICENSE. THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT
-HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED
-WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
-MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED.
-IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR
-ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
-DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE
-GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER
-IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR
-OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
-IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-*/
 
 #ifndef LOCATION_INTEGRATION_API_H
 #define LOCATION_INTEGRATION_API_H
 
 #include <loc_pla.h>
-#include <LocationClientApi.h>
-
-#include <array>
-#include <unordered_set>
-#include <unordered_map>
+#ifdef NO_UNORDERED_SET_OR_MAP
+    #include <set>
+    #include <map>
+    #define unordered_set set
+    #define unordered_map map
+#else
+    #include <unordered_set>
+    #include <unordered_map>
+#endif
 
 namespace location_integration
 {
@@ -101,39 +71,23 @@ enum LocConfigTypeEnum{
     CONFIG_BODY_TO_SENSOR_MOUNT_PARAMS = 8,
     /** Config various parameters for dead reckoning position
      *  engine. <br/> */
-    CONFIG_DEAD_RECKONING_ENGINE = 9,
+    CONFIG_DEAD_RECKONING_ENGINE = 8,
     /** Config minimum SV elevation angle setting used by the GNSS
      *  standard position engine (SPE).
      *  <br/> */
-    CONFIG_MIN_SV_ELEVATION = 10,
+    CONFIG_MIN_SV_ELEVATION = 9,
     /** Config the secondary band for configurations used by the GNSS
      *  standard position engine (SPE).
      *  <br/> */
-    CONFIG_CONSTELLATION_SECONDARY_BAND = 11,
+    CONFIG_CONSTELLATION_SECONDARY_BAND = 10,
     /** Config the run state, e.g.: pause/resume, of the position
      * engine <br/> */
-    CONFIG_ENGINE_RUN_STATE = 12,
+    CONFIG_ENGINE_RUN_STATE = 11,
     /** Config user consent to use GTP terrestrial positioning
      *  service. <br/> */
-    CONFIG_USER_CONSENT_TERRESTRIAL_POSITIONING = 13,
+    CONFIG_USER_CONSENT_TERRESTRIAL_POSITIONING = 12,
     /** Config the output nmea sentence types. <br/> */
-    CONFIG_OUTPUT_NMEA_TYPES = 14,
-    /** Config the integrity risk level of the position engine.
-     *  <br/> */
-    CONFIG_ENGINE_INTEGRITY_RISK = 15,
-    /** Config the xtra parameters used by the standard position
-     *  engine (SPE). <br/> */
-    CONFIG_XTRA_PARAMS = 16,
-    /** Inject the MerkleTree used by the standard position
-        engine (SPE). <br/> */
-    CONFIG_MERKLE_TREE = 17,
-    /** Config OSNMA enablement status used by the standard
-     *  position engine (SPE). <br/> */
-    CONFIG_OSNMA_ENABLEMENT = 18,
-    /** Config Map Matched Feedback used by DRE/PPE engine */
-    CONFIG_MAP_MATCHED_FEEDBACK = 19,
-    /** Max config enum supported. <br/> */
-    CONFIG_ENUM_MAX = 99,
+    CONFIG_OUTPUT_NMEA_TYPES = 13,
 
     /** Get configuration regarding robust location setting used by
      *  the GNSS standard position engine (SPE).  <br/> */
@@ -148,19 +102,6 @@ enum LocConfigTypeEnum{
     /** Get the secondary band configuration for constellation
      *  used by the GNSS standard position engine (SPE). <br/> */
     GET_CONSTELLATION_SECONDARY_BAND_CONFIG = 103,
-    /** Query xtra feature setting and xtra assistance data
-     *  status. <br/> */
-    GET_XTRA_STATUS = 104,
-    /** Register the callback to get update on xtra feature setting
-     *  and xtra assistance data status. <br/> */
-    REGISTER_XTRA_STATUS_UPDATE = 105,
-    /** Register the callback to get update on GNSS signal type
-     *  capabilities. <br/> */
-    REGISTER_SIGNAL_TYPES_UPDATE = 106,
-    /** Send out User Consent for XTRA service
-     *  status. <br/> */
-    CONFIG_XTRA_USER_CONSENT = 107,
-
 } ;
 
 /**
@@ -201,17 +142,6 @@ enum LocIntegrationEngineRunState {
     /** Request the position engine to be put into resume state.
      *  <br/> */
     LOC_INT_ENGINE_RUN_STATE_RESUME   = 2,
-    /** Request the selected position engine to be put into pause state
-     *  while retaining of any useful state data.
-     *  This engine run state is currently applicable to QDR engine only.
-     *  It is strongly advised to link this state to a vehicle state in which
-     *  the vehicle is expected to be stationary at the time of invocation of API
-     *  and subsequently, until the state is changed to Running.
-     *  For QDR, transition out of PAUSE_RETAIN happens
-     *  when either the state is changed to RESUME state via same command OR
-     *  when the device taken through suspend/resume or reboot power-state cycles.
-     *  <br/> */
-    LOC_INT_ENGINE_RUN_STATE_PAUSE_RETAIN   = 3,
 };
 
 /**
@@ -261,7 +191,6 @@ struct GnssSvIdInfo {
     /** constellation for the sv <br/>  */
     GnssConstellationType constellation;
     /** sv id range for the constellation: <br/>
-     * GPS SV id range: 1 to 32 <br/>
      * GLONASS SV id range: 65 to 96 <br/>
      * QZSS SV id range: 193 to 197 <br/>
      * BDS SV id range: 201 to 263 <br/>
@@ -583,106 +512,6 @@ typedef std::function<void(
     const ConstellationSet& secondaryBandDisablementSet
 )> LocConfigGetConstellationSecondaryBandConfigCb;
 
-/** Specify the XTRA status update trigger. <br/>
- *  The XTRA status update can be sent in two scenarios: by
- *  calling getXtraStatus() to get one time XTRA status update
- *  or by registering the callback via
- *  registerXtraStatusUpdate() to get asynchronous XTRA
- *  status update. <br/> */
-enum XtraStatusUpdateTrigger {
-    /** XTRA status update due to invoke getXtraStatus(). <br/> */
-    XTRA_STATUS_UPDATE_UPON_QUERY = 1,
-    /** XTRA status update due to first invokation of
-     *  registerXtraStatusUpdate(). <br/> */
-    XTRA_STATUS_UPDATE_UPON_REGISTRATION = 2,
-    /** XTRA status update due to status change due to enablement
-     *  and disablement and change in xtra assistance data status,
-     *  e.g.: from unknown to known during device bootup, or when
-     *  XTRA data gets downloaded. <br/> */
-    XTRA_STATUS_UPDATE_UPON_STATUS_CHANGE = 3,
-};
-
-/** Specify the XTRA assistance data status. */
-enum XtraDataStatus {
-    /** If XTRA feature is disabled or if XTRA feature is enabled,
-     *  but XTRA daemon has not yet retrieved the assistance data
-     *  status from modem on early stage of device bootup, xtra data
-     *  status will be unknown.  <br/>   */
-    XTRA_DATA_STATUS_UNKNOWN = 0,
-    /** If XTRA feature is enabled, but XTRA data is not present
-     *  on the device. <br/>   */
-    XTRA_DATA_STATUS_NOT_AVAIL = 1,
-    /** If XTRA feature is enabled, XTRA data has been downloaded
-     *  but it is no longer valid. <br/>   */
-    XTRA_DATA_STATUS_NOT_VALID = 2,
-    /** If XTRA feature is enabled, XTRA data has been downloaded
-     *  and is currently valid. <br/>   */
-    XTRA_DATA_STATUS_VALID = 3,
-};
-
-struct XtraStatus {
-    /** XTRA assistance data and NTP time download is enabled or
-     *  disabled. <br/> */
-    bool featureEnabled;
-    /** XTRA assistance data status. If XTRA assistance data
-     *  download is not enabled, this field will be set to
-     *  XTRA_DATA_STATUS_UNKNOWN. */
-    XtraDataStatus xtraDataStatus;
-    /** Number of hours that xtra assistance data will remain valid.
-     *  <br/>
-     *  This field will be valid when xtraDataStatus is set to
-     *  XTRA_DATA_STATUS_VALID. <br/>
-     *  For all other XtraDataStatus, this field will be set to
-     *  0. <br/> */
-    uint32_t xtraValidForHours;
-    /** Status field to reflect end user Intent to avail
-     *  XTRA Assistance service.
-     *  If the end user hasn’t called setUserConsentForXtra(),
-     *  the default status is Opt-In/true */
-    bool userConsent;
-};
-
-/**
- *  Specify the callback to retrieve the xtra feature settings
- *  and xtra assistance data status. The callback will be
- *  invoked for either successful processing of getXtraStatus()
- *  and registerXtraStatusUpdate() or when the trigger for xtra
- *  status update gets fired for registerXtraStatusUpdate().
- *  <br/>
- *
- *  In order to receive the xtra status settings and xtra
- *  assistance data status, client shall first instantiate the
- *  callback and pass it to the LocationIntegrationApi
- *  constructor and then invoke getXtraStatus() or
- *  registerXtraStatusUpdate(). <br/> */
-typedef std::function<void(
-   /** Specify the update trigger, whether this is due to one time
-    *  query of getXtraStatus(), or due to the xtra status update
-    *  callback gets called due to registerXtraStatusUpdate().
-    *  <br/> */
-   XtraStatusUpdateTrigger updateTrigger,
-   /** Specify the xtra feature status and xtra assistance data
-    *  validity info. */
-   const XtraStatus&    xtraStatus
-)> LocConfigGetXtraStatusCb;
-
-/**
- *  Specify the callback to receive GNSS signal type capabilities
- *  that modem supports. These capabilities represent the
- *  signal types the GNSS implementation supports with
- *  temporarily disabled signal types taken into account,
- *  such as the blocklisted satellites/constellations or
- *  the constellations disabled by regional restrictions. <br/>
- *
- *  In order to receive the GNSS signal type capabilities,
- *  client shall first instantiate the callback and
- *  pass it to the LocationIntegrationApi constructor
- *  and then invoke registerGnssSignalTypesUpdate() <br/> */
-typedef std::function<void(
-    /**  GNSS signal type capabilities with RF band. <br/> */
-    location_client::GnssSignalTypeMask signalType
-)> LocConfigGnssSignalTypesCb;
-
 /**
  *  Specify the set of callbacks that can be passed to
  *  LocationIntegrationAPI constructor to receive configuration
@@ -703,12 +532,6 @@ struct LocIntegrationCbs {
     /** Callback to receive the secondary band configuration for
      *  constellation. <br/> */
     LocConfigGetConstellationSecondaryBandConfigCb getConstellationSecondaryBandConfigCb;
-    /** Callback to receive the xtra feature enablement setting and
-     *  xtra assistance data status. <br/> */
-    LocConfigGetXtraStatusCb getXtraStatusCb;
-    /** Callback to receive the supported GNSS signal type
-     *  capabilities. <br/> */
-    LocConfigGnssSignalTypesCb gnssSignalTypesCb;
 };
 
 /** Specify the NMEA sentence types that the device will output
@@ -719,279 +542,44 @@ struct LocIntegrationCbs {
  *  generated NMEA. <br/> */
 enum NmeaTypesMask {
     /** Enable HLOS to generate and output GGA NMEA sentence.
-     *  <br/> */
+     *  <br> */
     NMEA_TYPE_GGA      = (1<<0),
     /** Enable HLOS to generate and output RMC NMEA sentence.
-     *  <br/> */
+     *  <br> */
     NMEA_TYPE_RMC      = (1<<1),
     /** Enable HLOS to generate and output GSA NMEA sentence.
-     *  <br/> */
+     *  <br> */
     NMEA_TYPE_GSA      = (1<<2),
     /** Enable HLOS to generate and output VTG NMEA sentence.
-     *  <br/> */
+     *  <br> */
     NMEA_TYPE_VTG      = (1<<3),
     /** Enable HLOS to generate and output GNS NMEA sentence.
-     *  <br/> */
+     *  <br> */
     NMEA_TYPE_GNS      = (1<<4),
     /** Enable HLOS to generate and output DTM NMEA sentence.
-     *  <br/> */
+     *  <br> */
     NMEA_TYPE_DTM      = (1<<5),
     /** Enable HLOS to generate and output GPGSV NMEA sentence for
-     *  SVs from GPS constellation. <br/> */
+     *  SVs from GPS constellation. <br> */
     NMEA_TYPE_GPGSV    = (1<<6),
     /** Enable HLOS to generate and output GLGSV NMEA sentence for
-     *  SVs from GLONASS constellation. <br/> */
+     *  SVs from GLONASS constellation. <br> */
     NMEA_TYPE_GLGSV    = (1<<7),
     /** Enable HLOS to generate and output GAGSV NMEA sentence for
-     *  SVs from GALILEO constellation. <br/> */
+     *  SVs from GALILEO constellation. <br> */
     NMEA_TYPE_GAGSV    = (1<<8),
     /** Enable HLOS to generate and output GQGSV NMEA sentence for
-     *  SVs from QZSS constellation. <br/> */
+     *  SVs from QZSS constellation. <br> */
     NMEA_TYPE_GQGSV    = (1<<9),
     /** Enable HLOS to generate and output GBGSV NMEA sentence for
-     *  SVs from BEIDOU constellation. <br/> */
+     *  SVs from BEIDOU constellation. <br> */
     NMEA_TYPE_GBGSV    = (1<<10),
     /** Enable HLOS to generate and output GIGSV NMEA sentence for
-     *  SVs from NAVIC constellation. <br/> */
+     *  SVs from NAVIC constellation. <br> */
     NMEA_TYPE_GIGSV    = (1<<11),
     /** Enable HLOS to generate and output all supported NMEA
-     *  sentences. <br/> */
+     *  sentences. <br> */
     NMEA_TYPE_ALL        = 0xffffffff,
-};
-
-/**  Specify the Geodetic datum for NMEA sentence types that
- *  are generated by GNSS stack on HLOS. <br/>
- */
-enum GeodeticDatumType {
-    /** Geodetic datum defined in World Geodetic System 1984 (WGS84)
-     *  format. <br/>
-     */
-    GEODETIC_TYPE_WGS_84 = 0,
-    /** Geodetic datum defined for use in the GLONASS system. <br/>*/
-    GEODETIC_TYPE_PZ_90 = 1,
-};
-
-/** Specify the logcat debug level. Currently, only XTRA
- *  daemon will support the runtime configure of debug log
- *  level. <br/>   */
-enum DebugLogLevel {
-    /** No debug message will be outputed. <br/>   */
-    DEBUG_LOG_LEVEL_NONE = 0,
-    /** Only error level debug messages will get logged. <br/>   */
-    DEBUG_LOG_LEVEL_ERROR = 1,
-    /** Only warning/error level debug messages will get logged.
-     *  <br/> */
-    DEBUG_LOG_LEVEL_WARNING = 2,
-    /** Only info/wanring/error level debug messages will get
-     *  logged. <br/>   */
-    DEBUG_LOG_LEVEL_INFO = 3,
-    /** Only debug/info/wanring/error level debug messages will
-     *  get logged. <br/> */
-    DEBUG_LOG_LEVEL_DEBUG = 4,
-    /** Verbose/debug/info/wanring/error level debug messages will
-     *  get logged. <br/>   */
-    DEBUG_LOG_LEVEL_VERBOSE = 5,
-};
-
-/** Xtra feature configuration parameters */
-struct XtraConfigParams {
-    /** Number of minutes between periodic, consecutive successful
-     *  XTRA assistance data downloads. <br/>
-     *
-     *  If 0 is specified, modem default download for XTRA
-     *  assistance data will be performed. <br/>
-     *
-     *  If none-zero value is specified, the configured value is in
-     *  unit of 1 minute and will be capped at a maximum of 168
-     *  hours and minimum of 48 hours. <br/>
-     */
-    uint32_t xtraDownloadIntervalMinute;
-    /** Connection timeout when connecting backend for both xtra
-     *  assistance data download and NTP time downlaod.  <br/>
-     *
-     *  If 0 is specified, the download timeout value will use
-     *  device default values. <br/>
-     *
-     *  If none-zero value is specified, the configured value is in
-     *  in unit of 1 second and should be capped at maximum of 300
-     *  secs (not indefinite) and minimum of 3 secs. <br/> */
-    uint32_t xtraDownloadTimeoutSec;
-    /** Interval to wait before retrying xtra assistance data
-     *  download in case of device error. <br/>
-     *
-     *  If 0 is specified, XTRA download retry will follow device
-     *  default behavior. <br/>
-     *
-     *  If none-zero value is specified, the config value is in unit
-     *  of 1 minute and should be capped with maximum of 1 day and
-     *  minimum of 3 minutes. <br/>
-     *
-     *  If zero is specified for xtraDownloadRetryIntervalMinute,
-     *  then xtraDownloadRetryAttempts will also use device default
-     *  value. <br/> */
-    uint32_t xtraDownloadRetryIntervalMinute;
-    /** Total number of allowed retry attempts for assistance data
-     *  download in case of device error. <br/>
-     *
-     *  If 0 is specified, XTRA download retry will follow device
-     *  default behavior. <br/>
-     *
-     *  The configured value is in unit of 1 retry and max number of
-     *  allowed retry is 6 per download interval. <br/>
-     *
-     *  If zero is specified for xtraDownloadRetryAttempts, then
-     *  xtraDownloadRetryIntervalMinute will also use device default
-     *  value. <br/> */
-    uint32_t xtraDownloadRetryAttempts;
-    /** Path to the certificate authority (CA) repository that need
-     *  to be used for XTRA assistance data download. <br/>
-     *
-     *  Max of 128 bytes, including null-terminating byte will be
-     *  supported. <br/>
-     *
-     *  If empty string is specified, device default CA repositaory
-     *  will be used. <br/>
-     *
-     *  Please note that this parameter does not apply to NTP time
-     *  download. <br/> */
-    std::string xtraCaPath;
-    /** URLs from which XTRA assistance data will be fetched. <br/>
-     *
-     *  The URLs, if provided, shall be complete and shall include
-     *  the port number to be used for download. <br/>
-     *
-     *  Max of 128 bytes, including null-terminating byte will be
-     *  supported. <br/>
-     *
-     *  Valid xtra server URLs should start with "https://".
-     *  <br/>
-     *
-     *  If XTRA server URLs are not specified, then device will use
-     *  the default XTRA server from modem. <br/>
-     */
-    std::array<std::string, 3> xtraServerURLs;
-    /** URLs for NTP server to fetch current time. <br/>
-     *
-     *  If no NTP server URL is provided, then device will use the
-     *  default NTP server. <br/>
-     *
-     *  The URLs, if provided, shall include the port number to be
-     *  used for download. <br/>
-     *
-     *  Max of 128 bytes, including null-terminating byte will be
-     *  supported. <br/>
-     *
-     *  Example of valid ntp server URL is:
-     *  ntp.exampleserver.com:123. <br/> */
-    std::array<std::string, 3> ntpServerURLs;
-
-    /** Enable or disable XTRA integrity download. Parameter is only
-     *  applicable if XTRA data download is enabled. <br/>
-     *
-     *  true: enable XTRA integrity download. <br/>
-     *  false: disable XTRA integrity download. <br/> */
-    bool xtraIntegrityDownloadEnable;
-
-    /** XTRA integrity download interval, only applicable if XTRA
-     *  integrity download is enabled. <br/>
-     *
-     *  If 0 is specified, the download timeout value will use
-     *  device default values. <br/>
-     *
-     *  Valid range is 360 minutes (6 hours) to 2880 minutes
-     *  (48 hours), in unit of minutes. <br/> */
-    uint32_t xtraIntegrityDownloadIntervalMinute;
-
-    /** Level of debug log messages that will be logged. <br/> */
-    DebugLogLevel xtraDaemonDebugLogLevel;
-
-    /** URL of NTS KE Server. <br/>
-     *
-     *  The URL, if provided, shall be complete and shall include
-     *  the port number. <br/>
-     *
-     *  Max of 128 bytes, including null-terminating byte will be
-     *  supported. <br/>
-     *
-     *  Valid NTS KE server URL should start with "https://".
-     *  <br/>
-     *
-     *  If NTS KE server URL is not specified, then device will use
-     *  the default URL of https://nts.xtracloud.net:4460. <br/>
-     */
-    std::string ntsKeServerURL;
-
-    /** To set the diag logging status for XTRA. <br/>
-     *
-     * 0 to disable diag logging <br/>
-     * 1 to enable diag logging <br/> */
-    uint32_t xtraDaemonDiagLoggingStatus;
-};
-
-enum mmfDataValidity {
-    LOC_HAS_VALID_MMFD_UTC_TIME     = (1<<0),
-    LOC_HAS_VALID_MMFD_LAT_DIFF     = (1<<1),
-    LOC_HAS_VALID_MMFD_LONG_DIFF    = (1<<2),
-    LOC_HAS_VALID_MMFD_TUNNEL       = (1<<3),
-    LOC_HAS_VALID_MMFD_BEARING      = (1<<4),
-    LOC_HAS_VALID_MMFD_ALTITUDE     = (1<<5),
-    LOC_HAS_VALID_MMFD_HOR_ACC      = (1<<6),
-    LOC_HAS_VALID_MMFD_ALT_ACC      = (1<<7),
-    LOC_HAS_VALID_MMFD_BEARING_ACC  = (1<<8),
-};
-
-struct mapMatchedFeedbackData {
-    /** Validity fields for MMF data fields to follow
-     *  Flags defined uisng enum mmfDataValidity */
-    uint64_t validityMask;
-
-    /** Unix epoch time of the location fix for which map-match
-     *  feedback is being sent, since the start of the Unix epoch
-     *  (00:00:00 January 1, 1970 UTC).
-     *  Unit: Milli-seconds */
-    uint64_t utcTimestampMs;
-
-    /** Latitude difference = map matched latitude - reported latitude
-     *  Unit: Degrees
-     *  Range: [-90.0, 90.0] */
-    double mapMatchedLatitudeDifference;
-
-    /** Longitude difference = map matched longitude - reported longitude
-     *  Unit: Degrees
-     *  Range: [-180.0, 180.0] */
-    double mapMatchedLongitudeDifference;
-
-    /** Bearing: The horizontal direction of travel of the device with
-     *  respect to north and is unrelated to the device orientation.
-     *  Unit: Degrees
-     *  range: [0, 360) */
-    float bearing;
-
-    /** Absolute Altitude above the WGS 84 reference ellipsoid
-        Unit: meters */
-    double altitude;
-
-    /** Horizontal accuracy radius defined with the
-     *  68th percentile confidence level.
-     *  Unit: meter
-     *  Range: 0 or greater */
-    float horizontalAccuracy;
-
-    /** Altitude accuracy. Defined with 68% confidence level.
-     *  Unit:meter
-     *  Range: 0 or greater */
-    float altitudeAccuracy;
-
-    /** Estimated bearing accuracy defined with
-     *  68 percentile confidence level (1 sigma).
-     *  Unit: Degrees
-     *  Range [0, 360) */
-    float bearingAccuracy;
-
-    /** Road Type. Decision to use the MMF data depends on isTunnel
-     *  Value: True or False */
-    bool isTunnel;
-
 };
 
 class LocationIntegrationApiImpl;
@@ -1035,6 +623,12 @@ public:
         position engine (SPE).
         <br/>
 
+        Please also note that GPS constellation can not be disabled
+        and GPS SV can not be blacklisted. So, if GPS constellation
+        is specified to be disabled or GPS SV is specified to be
+        blacklisted in the blacklistedSvList, those will be ignored.
+        <br/>
+
         Client should wait for the command to finish, e.g.: via
         LocConfigCb() received before issuing a second
         configConstellations() command. Behavior is not defined if
@@ -1053,32 +647,7 @@ public:
         the constellation configuration to device default. <br/>
 
         Empty blacklistedSvList will be interpreted as to not
-        disable any constellation and not to blacklist any SV, which
-        means all SVs from all constellations are allowed to be used
-        by SPE. <br/>
-
-        For example, if client wants to disable data demod for all
-        SBAS SVs, client need to specify SBAS to be blacklisted by
-        adding (GNSS_CONSTELLATION_TYPE_SBAS, 0) to param
-        blacklistedSvList. Another example, if client wants to
-        enable only GPS and GAL constellations to be used by SPE,
-        then client needs to specify all the other constellations
-        defined in GnssConstellationType as to be blacklisted, this
-        means adding (GNSS_CONSTELLATION_TYPE_QZSS, 0),
-        (GNSS_CONSTELLATION_TYPE_GPS, 0),
-        (GNSS_CONSTELLATION_TYPE_GLONASS, 0),
-        (GNSS_CONSTELLATION_TYPE_BEIDOU, 0),
-        (GNSS_CONSTELLATION_TYPE_SBAS, 0) and
-        (GNSS_CONSTELLATION_TYPE_NAVIC, 0) to param
-        blacklistedSvList. <br/>
-
-        For blacklist one or more SVs in one constellation,
-        if client only wants to disale sv id 1 from GPS
-        constellation, then client needs to add
-        (GNSS_CONSTELLATION_TYPE_GPS, 1) to param blacklistedSvList.
-        By doing this, all other SVs in GPS constellation whose SV
-        id is not 1 and all SVs in non-GPS consteallations are
-        allowed to be used by SPE. <br/>
+        disable any constellation and to not blacklist any SV. <br/>
 
         @return true, if request is successfully processed as
                 requested. When returning true, LocConfigCb() will
@@ -1627,9 +1196,8 @@ public:
         Set client consent to use terrestrial positioning. <br/>
 
         Client must call this API with userConsent set to true in order
-        to retrieve positions via
-        LocationClientApi::getSingleTerrestrialPosition(),
-        LocationClientApi::getSinglePosition(). <br/>
+        to retrieve terrestrial position via
+        LocationClientApi::getSingleTerrestrialPosition(). <br/>
 
         The consent will remain effective across power cycles, until
         this API is called with a different value.  <br/>
@@ -1665,7 +1233,7 @@ public:
         The NMEA sentence types are per-device setting and calling
         this API will impact all the location api clients that
         register to receive NMEA sentences. This API call is not
-        incremental and all the settings in the API will completely
+        incremental and the new NMEA sentence types will completely
         overwrite the previous call. <br/>
 
         If one or more unspecified bits are set in the NMEA mask,
@@ -1687,36 +1255,11 @@ public:
         running on the client process on the different processor.
         <br/>
 
-        Please note that both output nmea types, datum type and engine
-        mask is only applicable if NMEA_PROVIDER in gps.conf is set to
-        0 to use HLOS generated NMEA. <br/>
-
         @param
         enabledNmeaTypes: specify the set of NMEA sentences the
         device will generate and deliver to the location api clients
         that register to receive NMEA sentences. <br/>
 
-        Please note that the configured output nmea types is only
-        applicable if NMEA_PROVIDER in gps.conf is set to 0 to use
-        HLOS generated NMEA. <br/>
-
-        @param
-        nmeaDatumType: specify the geodetic datum type to be used
-        when generating NMEA sentences. If this parameter is not
-        specified, it will default to WGS-84. <br/>
-
-        @param
-        locReqEngineMask: specify the set of position engines that NMEA
-        are generated from. If this parameter is not
-        specified, it will default to LOC_REQ_ENGINE_FUSED_BIT.
-        <br/>
-
-
-        Please note that the configured nmeaDatumType is only
-        applicable if NMEA_PROVIDER in gps.conf is set to 0 to use
-        HLOS generated NMEA. NMEA dataum type specified in this API
-        will overwrite DATUM_TYPE set in gps.conf. <br/>
-
         @return true, if the API request has been accepted. The
                 status will be returned via configCB. When returning
                 true, LocConfigCb() will be invoked to deliver
@@ -1725,539 +1268,7 @@ public:
         @return false, if the API request has not been accepted for
                 further processing. <br/>
     */
-    bool configOutputNmeaTypes(NmeaTypesMask enabledNmeaTypes,
-                               GeodeticDatumType nmeaDatumType = GEODETIC_TYPE_WGS_84,
-            location_client::LocReqEngineTypeMask locReqEngineMask =
-            location_client::LOC_REQ_ENGINE_FUSED_BIT);
-
-   /** @brief
-        This API is used to instruct the specified engine to use
-        the provided integrity risk level for protection level
-        calculation in position report. This API can be called via
-        a position session is in progress.  <br/>
-
-        Prior to calling this API for a particular engine, the
-        engine shall not calcualte the protection levels and shall
-        not include the protection levels in its position report.
-        <br/>
-
-        Currently, only PPE engine will support this function.
-        LocConfigCb() will return LOC_INT_RESPONSE_NOT_SUPPORTED
-        when request is made to none-PPE engines. <br/>
-
-        Please note that the configured integrity risk level is not
-        persistent. Upon reboot of the processor that hosts the
-        location hal daemon, if the client process that configures
-        the integrity risk level resides on the same processor as
-        location hal daemon, it is expected that the client process
-        to get re-launched and reconfigure the integrity risk
-        level. If the client process that configures the integrity
-        risk level resides on a diffrent processor as the location
-        hal daemon, upon location hal daemon restarts, location hal
-        daemon will receive the configured integrity risk level
-        automatically again from location integration api library
-        running on the client process on the different processor
-        and thus the client process does not need to call this API
-        again. <br/>
-
-        @param
-        engType: the engine that is instructed to use the specified
-        integrity risk level for protection level calculation. The
-        protection level will be returned back in
-        LocationClientApi::GnssLocation. <br/>
-
-        @param
-        integrityRisk: the integrity risk level used for
-        calculating protection level in
-        LocationClientApi::GnssLocation. <br/>
-
-        The integrity risk is defined as a probability per epoch,
-        in unit of 2.5e-10. The valid range for actual integrity is
-        [2.5e-10, 1-2.5e-10]), this corresponds to range of [1,
-        4e9-1] of this parameter. <br/>
-
-        If the specified value of integrityRisk is NOT in the valid
-        range of [1, 4e9-1], the engine shall disable/invalidate
-        the protection levels in the position report. <br/>
-
-        @return true, if the API request has been accepted. The
-                status will be returned via configCB. When returning
-                true, LocConfigCb() will be invoked to deliver
-                asynchronous processing status.
-                <br/>
-
-        @return false, if the API request has not been accepted for
-                further processing. <br/>
-    */
-    bool configEngineIntegrityRisk(LocIntegrationEngineType engineType,
-                                   uint32_t integrityRisk);
-
-    /** @brief
-        Inject location <br/>
-
-        The LIA client should only call this API as per defined use
-        cases. If the LIA client doesnt follow the defined use case
-        and instead calling injectLocation randomly, it may cause
-        poor performance of the GNSS engine and break the defined
-        use case. <br/>
-
-        Please note that LocConfigCb() will not be invoked. <br/>
-
-        @param location location to be injected.<br/>
-
-        @return true, if the injected location is accepted. <br/>
-        @return false, if the injected location is not accepted.
-                Please note that the injected location will not be
-                accepted if does not have valid
-                latitude/longitude/horizontal accuracy or timestamp
-                info. <br/>
-    */
-    bool injectLocation(const location_client::Location& location);
-
-   /** @brief
-        This API is used to enable/disable the XTRA (Predicted GNSS
-        Satellite Orbit Data) feature on device. If XTRA feature is
-        to be enabled, this API is also used to configure the
-        various XTRA settings in the device.  <br/>
-
-        Client should wait for the command to finish, e.g.: via
-        configCb received before issuing a second configXtraParams
-        command. Behavior is not defined if client issues a second
-        request of configXtraParams without waiting for the finish of the
-        previous configXtraParams request.  <br/>
-
-        Please note that if configXtraParams has never been called
-        since device first time bootup, the default behavior will be
-        maintained. Also, configXtraParams is not incremental, as a
-        successful call of configXtraParams will always overwrite
-        the settings in the previous call. In addition, the
-        configured xtra parameters will be made persistent. However,
-        to be consistent with other location integration API, it is
-        recommended to config xtra params using location integration
-        API upon every device bootup. <br/>
-
-        @param
-        enable: true to enable XTRA feature on the device
-                false to disable XTRA feature on the device. When
-                setting to false, both XTRA assistance data and NTP
-                time download will be disabled.  <br/>
-
-        @param
-        configParams:pointer to XtraConfigParams to be used by XTRA
-        daemon module when enabling XTRA feature on the device.
-        if xtra feature is to be disabled, this parameter should be
-        set to NULL. If it is not set to NULL, the parameter will be
-        ignored.  <br/>
-
-        @return true, if the request is accepted for further
-                processing. When returning true, configCb will be
-                invoked to deliver asynchronous processing status.
-                If this API is called when XTRA feature is disabled via
-                modem NV, the API will return
-                LOC_INT_RESPONSE_NOT_SUPPORTED. <br/>
-
-        @return false, if the request is not accepted for further
-                processing. When returning false, configCb will not
-                be invoked.  <br/>
-    */
-    bool configXtraParams(bool enable, XtraConfigParams* configParams);
-
-
-    /** @brief
-        Query xtra feature setting and xtra assistance data status
-        used by the GNSS standard position engine (SPE). <br/>
-
-        If processing of the command fails, the failure status will
-        be returned via LocConfigCb(). If the processing of the command
-        is successful, the successful command status will be
-        returned via configCB, and xtra setting and xtra assistance
-        data status will be returned via LocConfigGetXtraStatusCb()
-        that is passed via the Location Integration API constructor.
-        If XTRA_DATA_STATUS_UNKNOWN is returned but XTRA feature is
-        enabled, the client shall wait a few seconds before calling
-        this API again. <br/>.
-
-        @return true, if the API request has been accepted. <br/>
-
-        @return false, if the API request has not been accepted for
-                further processing. When returning false, LocConfigCb()
-                and LocConfigGetXtraStatusCb() will not be invoked.
-                <br/>
-    */
-    bool getXtraStatus();
-
-    /** @brief
-        Register the callback to get update on xtra feature setting
-        and xtra assistance data status used by the GNSS standard
-        position engine (SPE). The callback to receive the status
-        update, e.g.: LocConfigGetXtraStatusCb() shall be
-        instantiated and passed via the Location Integration API
-        constructor. <br/>
-
-        If processing of the command fails, the failure status will
-        be returned via LocConfigCb(). If the processing of the command
-        is successful, the command successful status will be
-        returned via configCB. The xtra setting and assistance data
-        status update will be returned via
-        LocConfigGetXtraStatusCb() passed via the constructor. <br/>
-
-        Please see below for some triggers that
-        LocConfigGetXtraStatusCb() will be invoked: <br/>
-        (1) upon successful registering the API <br/>
-        (2) upon xtra feature been enabled/disabled via the
-        configXtraParams() <br/>
-        (3) upon successful xtra assistance data download
-        (4) when XTRA assistance data is downloaded <br/>
-
-        Please note if registerXtraStatusUpdate is called to with
-        register setting to true again, the
-        LocConfigGetXtraStatusCb() will ve invoked first with
-        updateTrigger set to XTRA_STATUS_UPDATE_UPON_REGISTRATION,
-        but subsequent update will only happen once per
-        enable/disable of the feature and per download. <br/>
-
-        @param
-        registerUpdate: true, to register for xtra status update
-                        false, to un-register for xtra stauts update
-                        <br/>
-
-        @return true, if the API request has been accepted. <br/>
-
-        @return false, if the API request has not been accepted for
-                further processing. When returning false, LocConfigCb()
-                and LocConfigGetXtraStatusCb() will not be invoked.
-                <br/>
-    */
-    bool registerXtraStatusUpdate(bool registerUpdate);
-
-    /** @brief
-        Inject Merkle tree configure buffer which reads from a .xml configure file.
-        Configure file contains Merkle Root, Merkle Nodes and information for
-        up to 2 public keys. This merkle tree is used by the standard position
-        engine (SPE).
-        Client should wait for the command to finish, e.g.: via
-        LocConfigCb() received before issuing a second configMerkleTree()
-        command. Behavior is not defined if client issues a second
-        request of configMerkleTree() without waiting for the
-        previous configMerkleTree() to finish. <br/>
-        Please note that caller should free the merkleTreeXml. <br/>
-        @param
-        merkleTreeXml: char buffer read from Merkle Tree configure file <br/>
-
-        @param
-        xmlSize: the length of char buffer
-        @return true, if the API request has been accepted. The
-                status will be returned via configCb. When returning
-                true, LocConfigCb() will be invoked to deliver
-                asynchronous processing status.
-                <br/>
-
-        @return false, if the API request has not been accepted for
-                further processing. <br/>
-    */
-    bool configMerkleTree(const char * merkleTreeXml, int xmlSize);
-
-    /** @brief
-        API to Enable/Disable OSNMA (Open Source Navigation Message Authentication)
-        operation in standard position engine (SPE).
-        Client should wait for the command to finish, e.g.: via
-        LocConfigCb() received before issuing a second configOsnmaEnablement()
-        command. Behavior is not defined if client issues a second
-        request of configOsnmaEnablement() without waiting for the
-        previous configOsnmaEnablement() to finish. <br/>
-        @param
-        isEnabled - The flag to indicate enable or disable OSNMA
-        @return true, if the API request has been accepted. The
-                status will be returned via configCb. When returning
-                true, LocConfigCb() will be invoked to deliver
-                asynchronous processing status.
-                <br/>
-
-        @return false, if the API request has not been accepted for
-                further processing. <br/>
-    */
-    bool configOsnmaEnablement(bool isEnabled);
-
-    /** @brief
-        Register the callback to get update on GNSS signal type
-        capabilities that modem supports. These capabilities
-        represent the supported signal types with
-        temporarily disabled signal types excluded,
-        like the blocklisted satellites/constellations or
-        the constellations disabled by regional restrictions.
-        The callback to receive the signal types update,
-        e.g.: LocConfigGnssSignalTypesCb() shall be
-        instantiated and passed via the Location Integration API
-        constructor. <br/>
-
-        If the processing of this command is successful,
-        the GNSS signal type capabilities update will be returned
-        via LocConfigGnssSignalTypesCb() which is passed via
-        the constructor. <br/>
-
-        Please see below for some triggers that
-        LocConfigGnssSignalTypesCb() will be invoked: <br/>
-        (1) upon successful registering the API <br/>
-        (2) upon change in the active GNSS/bands configuration <br/>
-
-        @param
-        registerUpdate: true, to register for GNSS signal types update
-                        false, to un-register for GNSS signal types update
-                        <br/>
-
-        @return true, if the API request has been accepted.
-                LocConfigCb() will be invoked to deliver asynchronous
-                processing status. The GNSS signal type capabilities will
-                be returned via LocConfigGnssSignalTypesCb().
-                <br/>
-
-        @return false, if the API request has not been accepted for
-                further processing. When returning false,
-                LocConfigGnssSignalTypesCb() will not be invoked.
-                <br/>
-
-    */
-    bool registerGnssSignalTypesUpdate(bool registerUpdate);
-
-    /** @brief
-        API to support passing map-matched Feedback data to the DRE engine.
-        Clients should use the below API to pass Map-matched data that will
-        be used by the DRE engine to compute position reports.<br/>
-
-        @param
-        mapMatchedFeedbackData: structure to store MMF data fields
-                        <br/>
-
-        @return true, if the API request has been accepted.
-                <br/>
-
-        @return false, if the API request has not been accepted for
-                further processing. <br/>
-    */
-    bool injectMapMatchedData (const mapMatchedFeedbackData& mapData);
-
-    /** @brief
-        This API allows customers to indicate the end user intent
-        (Opt-In or Opt-Out) to allow use of XTRA assistance service. <br/>
-
-        When the client sets the end user intent to false (Opted-Out),
-        the XTRA assistance service will be disabled. <br/>
-
-        The status of the intent will remain effective across power cycles, until
-        this API is called with a different value.  <br/>
-
-        @param
-        true: client indicates that End User Opted-In to use of XTRA assistance service.
-        false: client indicates that End User Opted-Out of use of XTRA assistance service.
-
-        @return true, if client intent has been accepted for further processing.
-                When returning true, LocConfigCb() will be invoked to deliver
-                asynchronous processing status. <br/>
-
-        @return false, if client intent  has not been accepted for further
-                processing. When returning false, no further processing
-                will be performed and LocConfigCb() will not be invoked.
-                <br/>
-    */
-    bool setUserConsentForXtra(bool userConsent);
-
-    /** @example example1:testGetConfigApi
-    * <pre>
-    * <code>
-    *    // Sample Code
-    * static void onConfigResponseCb(location_integration::LocConfigTypeEnum requestType,
-    *                               location_integration::LocIntegrationResponse response) {
-    *     if (response == LOCATION_RESPONSE_SUCCESS) {
-    *         // request to retrieve device setting has been accepted
-    *         // expect to receive the requested device setting via the registered callback
-    *     } else {
-    *         // request to retrieve device setting has failed
-    *         // no further callback will be delivered
-    *     }
-    * }
-    * static void onGetRobustLocationConfigCb(RobustLocationConfig robustLocationConfig) {
-    *     //...
-    * }
-    * static void onGetMinGpsWeekCb(uint16_t minGpsWeek) {
-    *     //...
-    * }
-    * static void onGetMinSvElevationCb(uint8_t minSvElevation) {
-    *     //...
-    * }
-    * static void onGetSecondaryBandConfigCb(const ConstellationSet& secondaryBandDisablementSet) {
-    *     //...
-    * }
-    * void testGetConfigApi() {
-    *   LocIntegrationCbs intCbs;
-    *   // Initialzie the callback needed to receive the configuration
-    *   intCbs.configCb = LocConfigCb(onConfigResponseCb);
-    *   intCbs.getRobustLocationConfigCb =
-    *       LocConfigGetRobustLocationConfigCb(onGetRobustLocationConfigCb);
-    *   intCbs.getMinGpsWeekCb = LocConfigGetMinGpsWeekCb(onGetMinGpsWeekCb);
-    *   intCbs.getMinSvElevationCb = LocConfigGetMinSvElevationCb(onGetMinSvElevationCb);
-    *   intCbs.getConstellationSecondaryBandConfigCb =
-    *           LocConfigGetConstellationSecondaryBandConfigCb(onGetSecondaryBandConfigCb);
-    *   LocConfigPriorityMap priorityMap;
-    *   // Create location integration api
-    *   pIntClient = new LocationIntegrationApi(priorityMap, intCbs);
-    *   bool retVal = false;
-    *
-    *   // Get robust location config
-    *   // If retVal is true, then retrieve the config in the callback
-    *   reVal = pIntClient->getRobustLocationConfig();
-    *
-    *   // Get min gps week
-    *   // If retVal is true, then retrieve the config in the callback
-    *   reVal = pIntClient->getMinGpsWeek();
-    *
-    *   // get min sv elevation
-    *   // If retVal is true, then retrieve the config in the callback
-    *   reVal = pIntClient->getMinSvElevation();
-    *
-    *   // get constellation config
-    *   // If retVal is true, then retrieve the config in the callback
-    *   reVal = pIntClient->getConstellationSecondaryBandConfig();
-    *   //...
-    * }
-    **
-    * </code>
-    * </pre>
-    */
-
-   /** @example example2:testSetConfigApi
-    * <pre>
-    * <code>
-    *    // Sample Code
-    * static void onConfigResponseCb(location_integration::LocConfigTypeEnum requestType,
-    *                               location_integration::LocIntegrationResponse response) {
-    *     if (response == LOCATION_RESPONSE_SUCCESS) {
-    *         // successfully configured the device for the specified setting
-    *     } else {
-    *         // failed to configure the device for the specified setting
-    *     }
-    * }
-    * void testSetConfigApi() {
-    *   LocIntegrationCbs intCbs;
-    *   // Initialzie the callback to receive the processing status
-    *   intCbs.configCb = LocConfigCb(onConfigResponseCb);
-    *   LocConfigPriorityMap priorityMap;
-    *   // Create location integration api
-    *   pIntClient = new LocationIntegrationApi(priorityMap, intCbs);
-    *
-    *   boot retVal;
-
-    *   // Enable TUNC mode with default threadhold and power budget
-    *   // If retVal is true, then check the processing status in onConfigResponseCb()
-    *   reVal = pIntClient->configConstrainedTimeUncertainty(true, 0.0, 0.0);
-    *
-    *   // Disable TUNC mode
-    *   // If retVal is true, then check the processing status in onConfigResponseCb()
-    *   reVal = pIntClient->configConstrainedTimeUncertainty(false);
-    *
-    *   // Enable position assisted clock estimator feature
-    *   // If retVal is true, then check the processing status in onConfigResponseCb()
-    *   reVal = pIntClient->configPositionAssistedClockEstimator(true)
-    *
-    *   // Delete all aiding data
-    *   // If retVal is true, then check the processing status in onConfigResponseCb()
-    *   reVal = pIntClient->deleteAllAidingData();
-    *
-    *   // Delete ephemeris
-    *   // If retVal is true, then check the processing status in onConfigResponseCb()
-    *   reVal = pIntClient->deleteAidingData(
-    *            (AidingDataDeletionMask) AIDING_DATA_DELETION_EPHEMERIS);
-    *
-    *   // Delete DR sensor calibartion data
-    *   // If retVal is true, then check the processing status in onConfigResponseCb()
-    *   reVal = pIntClient->deleteAidingData(
-    *           (AidingDataDeletionMask) AIDING_DATA_DELETION_DR_SENSOR_CALIBRATION);
-    *
-    *   // Get min gps week
-    *   // If retVal is true, then check the processing status in onConfigResponseCb()
-    *   reVal = pIntClient->getMinGpsWeek();
-    *
-    *   // restore sv constellation enablement/disablement and blacklisting setting to default
-    *   // If retVal is true, then check the processing status in onConfigResponseCb()
-    *   reVal = pIntClient->configConstellations(nullptr);
-    *
-    *   LocConfigBlacklistedSvIdList svList;
-    *   // disable usage of GLONASS system
-    *   svList.push_back(GNSS_CONSTELLATION_TYPE_GLONASS, 0);
-    *   // blacklist SBAS SV 120
-    *   svList.push_back(GNSS_CONSTELLATION_TYPE_SBAS, 120);
-    *   // If retVal is true, then check the processing status in onConfigResponseCb()
-    *   reVal = pIntClient->configConstellations(&svList);
-    *
-    *   // restore sv constellation enablement/disablement and blacklisting setting to default
-    *   // If retVal is true, then check the processing status in onConfigResponseCb()
-    *   reVal = pIntClient->configConstellations(nullptr);
-    *
-    *   // Config constellation secondary band
-    *   ConstellationSet secondaryBandDisablementSet;
-    *   // Disable secondary band for GLONASS
-    *   secondaryBandDisablementSet.emplace(GNSS_CONSTELLATION_TYPE_GLONASS);
-    *   // If retVal is true, then check the processing status in onConfigResponseCb()
-    *   reVal = pIntClient->configConstellationSecondaryBand(secondaryBandDisablementSetPtr);
-    *   // Restore the secondary band config to device default
-    *   // If retVal is true, then check the processing status in onConfigResponseCb()
-    *   reVal = pIntClient->configConstellationSecondaryBand(nullptr);
-    *
-    *   // Configure lever arm info
-    *   LeverArmParamsMap leverArmMap;
-    *   LeverArmParams leverArm = {};
-    *   leverArm.forwardOffsetMeters = 1.0;
-    *   leverArm.sidewayOffsetMeters = -0.1;
-    *   leverArm.upOffsetMeters = -0.8;
-    *   leverArmMap.emplace(LEVER_ARM_TYPE_GNSS_TO_VRP, leverArm);
-    *   // If retVal is true, then check the processing status in onConfigResponseCb()
-    *   reVal = pIntClient->configLeverArm(everArmMap);
-    *
-    *   // Config robust location
-    *   // Enable robust location to be used for none E-911 and E911 GPS session
-    *   // If retVal is true, then check the processing status in onConfigResponseCb()
-    *   reVal = pIntClient->configRobustLocation(true, true);
-    *   // Disable robust location to be used for all GPS sessions
-    *   // If retVal is true, then check the processing status in onConfigResponseCb()
-    *   reVal = pIntClient->configRobustLocation(false);
-    *
-    *   Config min gps week for date correponding to February 4, 2020
-    *   // If retVal is true, then check the processing status in onConfigResponseCb()
-    *   reVal = pIntClient->configMinGpsWeek(2091);
-    *
-    *   Config min SV elevation of 15 degree
-    *   // If retVal is true, then check the processing status in onConfigResponseCb()
-    *   reVal = pIntClient->configMinGpsWeek(15);
-    *
-    *   // Config dead reckoning engine, e.g.: botdy to sensor mount parameter
-    *   DeadReckoningEngineConfig dreConfig = {};
-    *   // Config body to sensor mount parameter
-    *   dreConfig.validMask = BODY_TO_SENSOR_MOUNT_PARAMS_VALID;
-    *   dreConfig.rollOffset = 60.0;
-    *   // If retVal is true, then check the processing status in onConfigResponseCb()
-    *   reVal = pIntClient->configDeadReckoningEngineParams(dreConfig);
-    *
-    *   // Pause DR engine
-    *   LocIntegrationEngineType engType = LOC_INT_ENGINE_DRE;
-    *   LocIntegrationEngineRunState engState = LOC_INT_ENGINE_RUN_STATE_PAUSE;
-    *   // If retVal is true, then check the processing status in onConfigResponseCb()
-    *   pIntClient->configEngineRunState(engType, engState);
-    *   engState = LOC_INT_ENGINE_RUN_STATE_RESUME;
-    *   // If retVal is true, then check the processing status in onConfigResponseCb()
-    *   retVal = pIntClient->configEngineRunState(engType, engState);
-    *
-    *   Set user constent for terrestrial positioning
-    *   // User gives consent to use terrestrial positioning
-    *   // If retVal is true, then check the processing status in onConfigResponseCb()
-    *   retVal = pIntClient->setUserConsentForTerrestrialPositioning(true);
-    *   // User does not give consent to use terrestrial positioning
-    *   // If retVal is true, then check the processing status in onConfigResponseCb()
-    *   retVal = pIntClient->setUserConsentForTerrestrialPositioning(false);
-    *   // ...
-    * }
-    **
-    * </code>
-    * </pre>
-    */
+    bool configOutputNmeaTypes(NmeaTypesMask enabledNmeaTypes);
 
 private:
     LocationIntegrationApiImpl* mApiImpl;

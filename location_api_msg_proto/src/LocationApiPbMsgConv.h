@@ -25,43 +25,6 @@
  * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
-
-/*
-Changes from Qualcomm Innovation Center are provided under the following license:
-
-Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
-
-Redistribution and use in source and binary forms, with or without
-modification, are permitted (subject to the limitations in the
-disclaimer below) provided that the following conditions are met:
-
-    * Redistributions of source code must retain the above copyright
-      notice, this list of conditions and the following disclaimer.
-
-    * Redistributions in binary form must reproduce the above
-      copyright notice, this list of conditions and the following
-      disclaimer in the documentation and/or other materials provided
-      with the distribution.
-
-    * Neither the name of Qualcomm Innovation Center, Inc. nor the names of its
-      contributors may be used to endorse or promote products derived
-      from this software without specific prior written permission.
-
-NO EXPRESS OR IMPLIED LICENSES TO ANY PARTY'S PATENT RIGHTS ARE
-GRANTED BY THIS LICENSE. THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT
-HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED
-WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
-MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED.
-IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR
-ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
-DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE
-GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER
-IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR
-OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
-IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-*/
-
 #ifndef LOCATION_API_PBMSGCONV_H
 #define LOCATION_API_PBMSGCONV_H
 
@@ -99,11 +62,6 @@ public:
     // DeadReckoningEngineConfig to PBDeadReckoningEngineConfig
     int convertDeadReckoningEngineConfigToPB(const DeadReckoningEngineConfig &drEngConfig,
             PBDeadReckoningEngineConfig *pbDrEngConfig) const;
-    // XtraConfigParams to PBXtraConfigParams
-    int convertXtraConfigParamsToPB(const XtraConfigParams& xtraParams,
-            PBXtraConfigParams* pbXtraParams) const;
-    int convertXtraStatusToPB(const XtraStatus& xtraStatus, PBXtraStatus* pbXtraStatus) const;
-
     // LocationOptions to PBLocationOptions
     int convertLocationOptionsToPB(const LocationOptions &locOpt,
             PBLocationOptions *pbLocOpt) const;
@@ -146,19 +104,6 @@ public:
     // LocationSystemInfo to PBLocationSystemInfo
     int convertLocSysInfoToPB(const LocationSystemInfo &locSysInfo,
             PBLocationSystemInfo *pbLocSysInfo) const;
-    // GnssDebugReport to PBGnssDebugReport
-    int convertGnssDebugReportToPB(const GnssDebugReport& gnssDebugReport,
-            PBGnssDebugReport* pbGnssDebugReport) const;
-    // GnssDcReportInfo to PBGnssDcReportInfo
-    int convertGnssDcReportToPB(const GnssDcReportInfo &dcReportInfo,
-            PBGnssDcReportInfo *pbDcReportInfo) const;
-    // AntennaInformation to PBAntennaInformation
-    int convertAntennaInfoToPB(const AntennaInformation& antennaInfo,
-            PBAntennaInformation* pbAntennaInfo) const;
-
-    // GnssMapMatchedData to PBGnssMapMatchedData
-    int convertGnssMmfDataToPB(const GnssMapMatchedData mmfData,
-           PBGnssMapMatchedData* pbMmfData) const;
 
     // Memory cleanup - Free up memory after PB conversion and serializing data
     inline void freeUpPBLocAPIStartTrackingReqMsg(PBLocAPIStartTrackingReqMsg &pbLocApiStartTrack)
@@ -380,9 +325,6 @@ public:
         pbLocApiMeasInd.clear_gnssmeasurementsnotification();
     }
 
-    inline void freeUpPBLocInjectMmfDataReqMsg(PBLocInjectMmfDataReqMsg &pbLogMmfDataInd) const {
-        pbLogMmfDataInd.clear_gnssmmfdata();
-    }
     inline void freeUpPBLocAPILocationSystemInfoIndMsg(PBLocAPILocationSystemInfoIndMsg
             &pbLocApiLocSysInfoInd) const {
         // PBLeapSecondChangeInfo - PBLocApiGnssSystemTimeStructType gpsTimestampLsChange = 1;
@@ -461,29 +403,6 @@ public:
         pbLocCfgGetConstlSecBandRespMsg.clear_msecondarybandconfig();
     }
 
-    inline void freeupPBLocAPIGetDebugRespMsg(
-            PBLocAPIGetDebugRespMsg& pbLocAPIGetDebugRespMsg) const {
-        // PBGnssDebugReport mDebugReport = 1;
-        pbLocAPIGetDebugRespMsg.clear_mdebugreport();
-    }
-
-    inline void freeupPBAntennaInfoMsg(
-            PBLocAPIAntennaInfoMsg& pbLocAPIAntennaInfoMsg) const {
-        // PBAntennaInformation mAntennaInformation = 1;
-        PBAntennaInformation antennaInformation = pbLocAPIAntennaInfoMsg.mantennainformation();
-        antennaInformation.clear_antennainfos();
-        pbLocAPIAntennaInfoMsg.clear_mantennainformation();
-    }
-
-    inline void freeUpPBLocConfigXtraReqMsg(PBLocConfigXtraReqMsg &pbLocConfMsg) const {
-        pbLocConfMsg.clear_xtraparams();
-    }
-
-    inline void freeUpPBLocConfigGetXtraStatusRespMsg(
-            PBLocConfigGetXtraStatusRespMsg &pbLocMsg) const {
-        pbLocMsg.clear_mxtrastatus();
-    }
-
     inline void freeUpPBLocAPIPingTestReqMsg(PBLocAPIPingTestReqMsg &pbLocApiPingTest) const {
         // repeated uint32 data = 2;
         pbLocApiPingTest.clear_data();
@@ -493,82 +412,6 @@ public:
             const {
         // repeated uint32 data = 1;
         pbLocApiPingTestIndMsg.clear_data();
-    }
-
-    inline void freeUpPBLocAPIEphIndMsg(PBLocAPIEphIndMsg &pbLocApiEphInd) const {
-
-        PBGnssEphemerisNotification gnssEphNotif =
-                pbLocApiEphInd.gnssephemerisnotification();
-        gnssEphNotif.clear_systemtime();
-
-        PBEphInfoUnion ephUnion = gnssEphNotif.ephunion();
-        switch (gnssEphNotif.gnssconstellation()) {
-            case PB_GNSS_LOC_SV_SYSTEM_GPS:
-            {
-                PBGpsEphemerisResponse gpsResp =  ephUnion.gpsephemeris();
-                for (uint32_t i = 0; i < gpsResp.gpsephemerisdata_size(); i++) {
-                    PBGpsEphemeris gpsEph = gpsResp.gpsephemerisdata(i);
-                    gpsEph.clear_commonephemerisdata();
-                }
-                gpsResp.clear_gpsephemerisdata();
-                ephUnion.clear_gpsephemeris();
-                break;
-            }
-            case PB_GNSS_LOC_SV_SYSTEM_GALILEO:
-            {
-                PBGalileoEphemerisResponse galResp =  ephUnion.galileoephemeris();
-                for (uint32_t i = 0; i < galResp.galephemerisdata_size(); i++) {
-                    PBGalileoEphemeris galEph = galResp.galephemerisdata(i);
-                    galEph.clear_commonephemerisdata();
-                }
-                galResp.clear_galephemerisdata();
-                ephUnion.clear_galileoephemeris();
-                break;
-            }
-            case PB_GNSS_LOC_SV_SYSTEM_GLONASS:
-            {
-                PBGlonassEphemerisResponse gloResp =  ephUnion.glonassephemeris();
-                gloResp.clear_gloephemerisdata();
-                ephUnion.clear_glonassephemeris();
-                break;
-            }
-            case PB_GNSS_LOC_SV_SYSTEM_BDS:
-            {
-                PBBdsEphemerisResponse bdsResp =  ephUnion.bdsephemeris();
-                for (uint32_t i = 0; i < bdsResp.bdsephemerisdata_size(); i++) {
-                    PBBdsEphemeris bdsEph = bdsResp.bdsephemerisdata(i);
-                    bdsEph.clear_commonephemerisdata();
-                }
-                bdsResp.clear_bdsephemerisdata();
-                ephUnion.clear_bdsephemeris();
-                break;
-            }
-            case PB_GNSS_LOC_SV_SYSTEM_QZSS:
-            {
-                PBQzssEphemerisResponse qzssResp =  ephUnion.qzssephemeris();
-                for (uint32_t i = 0; i < qzssResp.qzssephemerisdata_size(); i++) {
-                    PBGpsEphemeris qzssEph = qzssResp.qzssephemerisdata(i);
-                    qzssEph.clear_commonephemerisdata();
-                }
-                qzssResp.clear_qzssephemerisdata();
-                ephUnion.clear_qzssephemeris();
-                break;
-            }
-            case PB_GNSS_LOC_SV_SYSTEM_NAVIC:
-            {
-                PBNavicEphemerisResponse navicResp =  ephUnion.navicephemeris();
-                for (uint32_t i = 0; i < navicResp.navicephemerisdata_size(); i++) {
-                    PBNavicEphemeris navicEph = navicResp.navicephemerisdata(i);
-                    navicEph.clear_commonephemerisdata();
-                }
-                navicResp.clear_navicephemerisdata();
-                ephUnion.clear_navicephemeris();
-                break;
-            }
-        }
-        gnssEphNotif.clear_ephunion();
-        // PBGnssMeasurementsNotification gnssMeasurementsNotification = 1;
-        pbLocApiEphInd.clear_gnssephemerisnotification();
     }
 
     // **** helper function to convert from protobuf struct to normal struct.
@@ -630,20 +473,6 @@ public:
     // PBGnssConfigRobustLocation to GnssConfigRobustLocation
     int pbConvertToGnssConfigRobustLocation(const PBGnssConfigRobustLocation &pbGnssCfgRobLoc,
             GnssConfigRobustLocation &gnssCfgRobLoc) const;
-    // PBGnssDebugReport to GnssDebugReport
-    int pbConvertToGnssDebugReport(const PBGnssDebugReport &pbGnssDebugReport,
-            GnssDebugReport &gnssDebugReport) const;
-    int pbConvertToDcReport(const PBGnssDcReportInfo & pbDcReportInfo,
-                            GnssDcReportInfo & dcReporInfo) const;
-    // PBAntennaInformation to AntennaInformation
-    int pbConvertToAntennaInfo(const PBAntennaInformation& pbAntennaInfo,
-            AntennaInformation& antennaInfo) const;
-    int pbConvertToXtraConfig(const PBXtraConfigParams &pbXtraParams,
-            XtraConfigParams& xtraParams) const;
-    int pbConvertToXtraStatus(const PBXtraStatus &pbXtraStatus,
-            XtraStatus& xtraStatus) const;
-    int pbConvertToGnssMmfData(const PBGnssMapMatchedData& pbMmfData,
-            GnssMapMatchedData& mmfData) const;
 
     // MASK CONVERSION
     // ***************
@@ -683,33 +512,11 @@ public:
     uint32_t getNmeaTypesMaskFromPB(const uint32_t &pbNmeaTypesMask) const;
     uint32_t getPBMaskForNmeaTypesMask(const uint32_t& nmeaTypesMask) const;
 
-    // LocReqEngineTypeMask to PBLocReqEngineTypeMask
-    uint32_t getPBMaskForLocReqEngineTypeMask(const uint32_t &locReqEngTypeMask) const;
-    // PBLocReqEngineTypeMask to LocReqEngineTypeMask
-    uint32_t getLocReqEngineTypeMaskFromPB(const uint32_t &pbLocReqEngTypeMask) const;
-
     // **** helper function for enum conversion from normal format to protobuf enums.
     PBBatchingMode getPBEnumForBatchingMode(const BatchingMode &batchMode) const;
     PBLocationError getPBEnumForLocationError(const LocationError &locErr) const;
     PBELocMsgID getPBEnumForELocMsgID(const ELocMsgID &eLocMsgId) const;
     PBClientType getPBEnumForClientType(const ClientType &clientTyp) const;
-    GnssDcReportType getDcReportTypeFromPB(const PBGnssDcReportType& pbDcReportType) const;
-    PBGnssDcReportType getPBEnumForDcReportType(const GnssDcReportType& dcReportType) const;
-
-    DebugLogLevel getDebugLogLevelFromPB(const PBDebugLogLevel &pbLogLevel) const;
-    PBDebugLogLevel getPBEnumForDebugLogLevel(const DebugLogLevel &logLevel) const;
-    XtraStatusUpdateType getXtraStatusUpdateTypeFromPB(
-            const PBXtraStatusUpdateType &pbXtraStatusUpdateType) const;
-    PBXtraStatusUpdateType getPBEnumForXtraStatusUpdateType(
-            const XtraStatusUpdateType &xtraStatusUpdateType) const;
-    XtraDataStatus getXtraDataStatusFromPB(const PBXtraDataStatus &pbXtraDataStatus) const;
-    PBXtraDataStatus getPBEnumForXtraDataStatus(const XtraDataStatus &xtraDataStatus) const;
-    // GnssSignalTypeMask to PBGnssSignalTypeMask
-    uint32_t getPBMaskForGnssSignalTypeMask(const uint32_t &gnssSignalTypeMask) const;
-    int pbConvertToGnssEphNotif(const PBGnssEphemerisNotification &pbGnssEphNotif,
-        GnssSvEphemerisReport &gnssEphNotif) const;
-    int convertGnssEphNotifToPB(const GnssSvEphemerisReport &gnssEphNotif,
-        PBGnssEphemerisNotification* pbGnssEphNotif) const;
 
 private:
     bool mPbDebugLogEnabled;
@@ -769,64 +576,12 @@ private:
     // BodyToSensorMountParams to PBLIABodyToSensorMountParams
     int convertBodyToSensorMountParamsToPB(const BodyToSensorMountParams &bodyToSensorMntParams,
             PBLIABodyToSensorMountParams *pbBodyToSensorMntParams) const;
-    int convertGnssDebugLocationToPB(const GnssDebugLocation& debugLocation,
-            PBGnssDebugLocation* pbDebugLocation) const;
-    int convertTimespecToPB(const timespec& utcReported,
-            PBTimespec* pbUtcReported) const;
-    int convertGnssDebugTimeToPB(const GnssDebugTime& gnssDebugTime,
-            PBGnssDebugTime* pbGnssDebugTime) const;
-    int convertGnssDebugSatelliteInfoToPB(
-            const GnssDebugSatelliteInfo& satelliteInfo,
-            PBGnssDebugSatelliteInfo* pbSatelliteInfo) const;
-    int convertGnssAntennaInformationToPB(
-            const GnssAntennaInformation& gnssAntennaInfo,
-            PBGnssAntennaInformation* pbGnssAntennaInfo) const;
-    int convertGnssCoordinateToPB(
-            const GnssCoordinate& gnssCoordinate,
-            PBGnssCoordinate* pbGnssCoordinate) const;
-    int convert2DimensionDoubleVectorToPB(
-            const std::vector<std::vector<double>>& doubleArrays,
-            PB2DimensionDoubleVector* pbDoubleArrarys) const;
-
-    // HAL to PB EPH functions
-    PBGnssEphAction getPBEphAction (const GnssEphAction& ephAction) const;
-    PBGalEphSignalSource convertDataSignalSourceToPB(
-            const GalEphSignalSource &ephSignal) const;
-    int convertCommanEphToPB (const GnssEphCommon &commanEph,
-            PBGnssEphCommon *pbCommanEph) const ;
-    int convertGpsExtendedEphToPB (
-            const GpsExtendedEphemeris &extEph,
-            PBGpsExtendedEphemeris* pbExtEph) const;
-    int convertBdsExtendedEphToPB (
-        const BdsExtendedEphemeris &extEph,
-        PBBdsExtendedEphemeris* pbExtEph) const;
-
-    int convertGpsEphDataToPB(const GpsEphemeris &halEphInfo,
-            PBGpsEphemeris *pbEphInfo) const;
-    int convertGpsEphResponseToPB(const GpsEphemerisResponse  &halResp,
-            PBGpsEphemerisResponse*  pbEphResp) const;
-    int convertBdsEphDataToPB(const BdsEphemeris &halEphInfo,
-            PBBdsEphemeris *pbEphInfo) const;
-    int convertBdsEphResponseToPB(const BdsEphemerisResponse  &halResp,
-            PBBdsEphemerisResponse*  pbEphResp) const;
-    int convertGalileoEphDataToPB(const GalileoEphemeris &halEphInfo,
-            PBGalileoEphemeris *pbEphInfo) const;
-    int convertGlonassEphDataToPB(const GlonassEphemeris &halEphInfo,
-            PBGlonassEphemeris *pbEphInfo) const;
-    int convertGloEphResponseToPB(const GlonassEphemerisResponse  &halResp,
-    PBGlonassEphemerisResponse*  pbEphResp) const;
-    int convertGalEphResponseToPB(const GalileoEphemerisResponse  &halResp,
-            PBGalileoEphemerisResponse*  pbEphResp) const;
-    int convertQzssEphResponseToPB(const QzssEphemerisResponse  &halResp,
-            PBQzssEphemerisResponse*  pbEphResp) const;
-    int convertNavicEphDataToPB(const NavicEphemeris &halEphInfo,
-            PBNavicEphemeris *pbEphInfo) const;
-    int convertNavicEphResponseToPB(const NavicEphemerisResponse  &halResp,
-            PBNavicEphemerisResponse*  pbEphResp) const;
 
     // **** helper function for mask conversion to protobuf masks
     // LeverArmTypeMask to PBLIALeverArmTypeMask
     uint32_t getPBMaskForLeverArmTypeMask(const uint32_t &leverArmTypeMask) const;
+    // LocReqEngineTypeMask to PBLocReqEngineTypeMask
+    uint32_t getPBMaskForLocReqEngineTypeMask(const uint32_t &locReqEngTypeMask) const;
     // GnssConfigRobustLocationValidMask to PBGnssConfigRobustLocationValidMask
     uint32_t getPBMaskForGnssCfgRobustLocValidMask(
             const uint32_t &gnssCfgRobustLocValidMask) const;
@@ -871,6 +626,8 @@ private:
             const uint32_t &gnssGloTimeStructTypeFlags) const;
     // GnssSvOptionsMask to PBLocApiGnssSvOptionsMask
     uint32_t getPBMaskForGnssSvOptionsMask(const uint32_t &gnssSvOptMask) const;
+    // GnssSignalTypeMask to PBGnssSignalTypeMask
+    uint32_t getPBMaskForGnssSignalTypeMask(const uint32_t &gnssSignalTypeMask) const;
     // GeofenceBreachTypeMask to PBGeofenceBreachTypeMask
     uint32_t getPBMaskForGeofenceBreachTypeMask(const uint32_t &gfBreachTypeMask) const;
     // DeadReckoningEngineConfigValidMask to PBDeadReckoningEngineConfigValidMask
@@ -880,11 +637,9 @@ private:
     uint32_t getPBMaskForDrEngineAidingDataMask(const uint32_t &drEngAidDataMask) const;
     // DrSolutionStatusMask to PBDrSolutionStatusMask
     uint32_t getPBMaskForDrSolutionStatusMask(const uint32_t &drSolnStatusMask) const;
-    PBGnssMeasurementsCodeType getPBMeasCodeType(const GnssMeasurementsCodeType &codeType) const;
 
     // **** helper function for enum conversion to protobuf enums
     PBGnssSuplMode getPBEnumForGnssSuplMode(const GnssSuplMode &gnssSuplMode) const;
-    PBFixQualityLevel getPBEnumForFixQualityLevel(const FixQualityLevel &qualityLevel) const;
     PBBatchingStatus getPBEnumForBatchingStatus(const BatchingStatus &batchStatus) const;
     PBLocationReliability getPBEnumForLocationReliability(
             const LocationReliability &locReliab) const;
@@ -894,16 +649,8 @@ private:
             const GnssMeasurementsMultipathIndicator &gnssMeasMultiPathIndic) const;
     PBLocApiGnss_LocSvSystemEnumType getPBEnumForGnssLocSvSystem(
             const Gnss_LocSvSystemEnumType &gnssLocSvSysEnumType) const;
-    PBAgcStatus getPBEnumForAgcStatus(const AgcStatus &agcStatus) const;
     // PBLocationSessionStatus from/to loc_sess_status
     PBLocationSessionStatus getPBEnumForLocSessionStatus(const loc_sess_status &status) const;
-    PBGnssEphemerisType getPBEnumForGnssEphemerisType(
-            const GnssEphemerisType& ephemerisType) const;
-    PBGnssEphemerisSource getPBEnumForGnssEphemerisSource(
-            const GnssEphemerisSource& ephemerisSource) const;
-    PBGnssEphemerisHealth getPBEnumForGnssEphemerisHealth(
-            const GnssEphemerisHealth& ephemerisHealth) const;
-
 
     // ** Special enum conversion
     // GnssSvType to PBLocApiGnss_LocSvSystemEnumType
@@ -919,6 +666,8 @@ private:
     uint64_t getGnssSvTypesMaskFromPB(const uint64_t &pbGnssSvTypesMask) const;
     // PBLocApiGnssAidingDataSvMask to GnssAidingDataSvMask
     uint32_t getGnssAidingDataSvMaskFromPB(const uint32_t &pbGnssAidDataSvMask) const;
+    // PBLocReqEngineTypeMask to LocReqEngineTypeMask
+    uint32_t getLocReqEngineTypeMaskFromPB(const uint32_t &pbLocReqEngTypeMask) const;
     // PBLocationSystemInfoMask to LocationSystemInfoMask
     uint32_t getLocationSystemInfoMaskFromPB(const uint32_t &pbLocSysInfoMask) const;
     // PBGnssDataMask to GnssDataMask
@@ -965,13 +714,9 @@ private:
     uint32_t getDrEngineAidingDataMaskFromPB(const uint32_t &pbDrEngAidDataMask) const;
     // PBDrSolutionStatusMask to DrSolutionStatusMask
     uint32_t getDrSolutionStatusMaskFromPB(const uint32_t &pbDrSolnStatusMask) const;
-    GnssMeasurementsCodeType getMeasCodeTypeFromPB(
-        const PBGnssMeasurementsCodeType &pbMeasCodeType) const;
 
     // **** helper function for enum conversion from protobuf enums to normal format.
     GnssSuplMode getEnumForPBGnssSuplMode(const PBGnssSuplMode &pbGnssSuplMode) const;
-    FixQualityLevel getEnumForPBFixQualityLevel(
-                const PBFixQualityLevel &pbFixQualityLevel) const;
     BatchingStatus getEnumForPBBatchingStatus(const PBBatchingStatus &pbBatchStat) const;
     GnssMeasurementsMultipathIndicator getEnumForPBGnssMeasMultipathIndic(
             const PBGnssMeasurementsMultipathIndicator &pbGnssMeasMultipathIndic) const;
@@ -982,13 +727,6 @@ private:
     LocOutputEngineType getEnumForPBLocOutputEngineType(
             const PBLocApiOutputEngineType &pbLocOpEngType) const;
     loc_sess_status getLocSessionStatusFromPB(const PBLocationSessionStatus &pbStatus) const;
-    GnssEphemerisType getEnumForPBGnssEphemerisType(
-            const PBGnssEphemerisType& pbGnssEphemerisType) const;
-    GnssEphemerisSource getEnumForPBGnssEphemerisSource(
-            const PBGnssEphemerisSource& pbGnssEphemerisSource) const;
-    GnssEphemerisHealth getEnumForPBGnssEphemerisHealth(
-            const PBGnssEphemerisHealth& pbGnssEphemerisHealth) const;
-    AgcStatus getEnumForPBAgcStatus(const PBAgcStatus &pbAgcStatus) const;
 
     // ** Special enum conversion
     // PBLocApiGnss_LocSvSystemEnumType to GnssSvType
@@ -1048,64 +786,6 @@ private:
     int pbConvertToBodyToSensorMountParams(
             const PBLIABodyToSensorMountParams &pbBody2SensorMntParam,
             BodyToSensorMountParams &body2SensorMntParam) const;
-    // Helper function of GnssDebugReport
-    int pbConvertToGnssTimespec(const PBTimespec& pbTimespec,
-            timespec& timespec) const;
-    int pbConvertToGnssDebugTime(const PBGnssDebugTime &pbDebugTime,
-            GnssDebugTime debugTime) const;
-    int pbConvertToGnssDebugLocation(const PBGnssDebugLocation& pbDebugLocation,
-            GnssDebugLocation& debugLocation) const;
-    int pbConvertToGnssDebugSatelliteInfo(
-            const PBGnssDebugSatelliteInfo &pbSatelliteInfo,
-            GnssDebugSatelliteInfo &satelliteInfo) const;
-    // Helper function of AntennaInfo
-    int pbConvertToGnssAntennaInformaiton(
-            const PBGnssAntennaInformation& pbGnssAntennaInfo,
-            GnssAntennaInformation& gnssAntennaInfo) const;
-    int pbConvertToGnssCoordinate(
-            const PBGnssCoordinate& pbGnssCoordinate,
-            GnssCoordinate& gnssCoordinate) const;
-    int pbConvertTo2DimensionDoubleVector(
-            const PB2DimensionDoubleVector& pbDoubleArrarys,
-            std::vector<std::vector<double>>& doubleArrays) const;
-
-    // To PB to HAL Eph report
-    GnssEphAction pbConvertToEphAction (const PBGnssEphAction& pbEphAction) const;
-    int pbConvertToCommanEph(const PBGnssEphCommon &pbCommanEph,
-        GnssEphCommon &commanEph) const;
-
-    int pbConvertToGpsEphResponse(const PBGpsEphemerisResponse  &pbEphResp,
-        GpsEphemerisResponse  &halResp) const;
-
-    int pbConvertToGpsExtendedEph(   const PBGpsExtendedEphemeris &pbEphInfo,
-            GpsExtendedEphemeris &halEphInfo) const;
-
-    int pbConvertToGpsEphData(const PBGpsEphemeris &pbEphInfo,
-        GpsEphemeris &halEphInfo) const;
-    int pbConvertToBdsExtendedEph(const PBBdsExtendedEphemeris &pbEphInfo,
-            BdsExtendedEphemeris &halEphInfo) const;
-    int pbConvertToBdsEphData(const PBBdsEphemeris &pbEphInfo,
-        BdsEphemeris &halEphInfo) const;
-    int pbConvertToBdsEphResponse(const PBBdsEphemerisResponse &pbEphResp,
-        BdsEphemerisResponse  &halResp) const;
-    int pbConvertToGlonassEphData(const  PBGlonassEphemeris &pbEphInfo,
-        GlonassEphemeris &halEphInfo) const;
-    int pbConvertToGloEphResponse(const PBGlonassEphemerisResponse  &pbEphResp,
-        GlonassEphemerisResponse  &halResp) const;
-    int pbConvertToGalileoEphData(const  PBGalileoEphemeris &pbEphInfo,
-        GalileoEphemeris &halEphInfo) const;
-    int pbConvertToGalEphResponse(const PBGalileoEphemerisResponse  &pbEphResp,
-        GalileoEphemerisResponse  &halResp) const;
-    int pbConvertToQzssEphResponse(const PBQzssEphemerisResponse  &pbEphResp,
-        QzssEphemerisResponse  &halResp) const;
-    int pbConvertToNavicEphData(const PBNavicEphemeris &pbEphInfo,
-        NavicEphemeris &halEphInfo) const;
-    int pbConvertToNavicEphResponse(const PBNavicEphemerisResponse  &pbEphResp,
-        NavicEphemerisResponse  &halResp) const;
-    int pbConvertToSystemTime(const PBLocApiGnssSystemTimeStructType &pbSystemTime,
-        GnssSystemTimeStructType &halSystemTime) const;
-    GalEphSignalSource pbConvertToDataSourceSignal(
-        const PBGalEphSignalSource &pbSignal) const;
 };
 
 #endif /* LOCATION_API_PBMSGCONV_H */

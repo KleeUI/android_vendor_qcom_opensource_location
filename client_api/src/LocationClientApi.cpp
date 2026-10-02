@@ -25,45 +25,9 @@
  * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
-/*
-Changes from Qualcomm Innovation Center are provided under the following license:
-
-Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
-
-Redistribution and use in source and binary forms, with or without
-modification, are permitted (subject to the limitations in the
-disclaimer below) provided that the following conditions are met:
-
-    * Redistributions of source code must retain the above copyright
-      notice, this list of conditions and the following disclaimer.
-
-    * Redistributions in binary form must reproduce the above
-      copyright notice, this list of conditions and the following
-      disclaimer in the documentation and/or other materials provided
-      with the distribution.
-
-    * Neither the name of Qualcomm Innovation Center, Inc. nor the names of its
-      contributors may be used to endorse or promote products derived
-      from this software without specific prior written permission.
-
-NO EXPRESS OR IMPLIED LICENSES TO ANY PARTY'S PATENT RIGHTS ARE
-GRANTED BY THIS LICENSE. THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT
-HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED
-WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
-MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED.
-IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR
-ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
-DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE
-GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER
-IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR
-OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
-IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-*/
 
 #define LOG_TAG "LocSvc_LocationClientApi"
 
-#include <inttypes.h>
 #include <loc_cfg.h>
 #include <cmath>
 #include <LocationDataTypes.h>
@@ -83,284 +47,11 @@ bool Geofence::operator==(Geofence& other) {
             mGeofenceImpl == other.mGeofenceImpl;
 }
 
-class TrackingSessCbHandler {
-    public:
-        TrackingSessCbHandler(LocationClientApiImpl *pClientApiImpl, ResponseCb rspCb,
-                GnssReportCbs gnssReportCbs, uint32_t intervalInMs) {
-
-            memset(&mCallbackOptions, 0, sizeof(LocationCallbacks));
-            mCallbackOptions.size =  sizeof(LocationCallbacks);
-            if (gnssReportCbs.gnssLocationCallback) {
-                mCallbackOptions.gnssLocationInfoCb =
-                        [pClientApiImpl, gnssLocCb=gnssReportCbs.gnssLocationCallback]
-                        (::GnssLocationInfoNotification n) {
-                    GnssLocation gnssLocation =
-                            LocationClientApiImpl::parseLocationInfo(n);
-                    gnssLocCb(gnssLocation);
-                    pClientApiImpl->logLocation(gnssLocation,
-                                                LOC_REPORT_TRIGGER_DETAILED_TRACKING_SESSION);
-                };
-            }
-
-            initializeCommonCbs(pClientApiImpl, rspCb, gnssReportCbs.gnssSvCallback,
-                    gnssReportCbs.gnssNmeaCallback,
-                    gnssReportCbs.gnssDataCallback,
-                    gnssReportCbs.gnssMeasurementsCallback,
-                    gnssReportCbs.gnssNHzMeasurementsCallback,
-                    gnssReportCbs.gnssDcReportCallback,
-                    gnssReportCbs.gnssEphReportCallback,
-                    intervalInMs);
-
-            if (gnssReportCbs.nmeaSentencesCallback) {
-                mCallbackOptions.gnssNmeaCb =
-                        [pClientApiImpl, nmeaSentencesCallback =
-                                gnssReportCbs.nmeaSentencesCallback](
-                                ::GnssNmeaNotification n) {
-                    uint64_t timestamp = n.timestamp;
-                    LocOutputEngineType locOutputEngType = (LocOutputEngineType)n.locOutputEngType;
-                    std::string nmea(n.nmea);
-                    LOC_LOGv("<<< message = nmea[%s]", nmea.c_str());
-                    nmeaSentencesCallback(locOutputEngType, timestamp, nmea);
-                    pClientApiImpl->getLogger().log(
-                            timestamp, nmea.size(), nmea.c_str(), locOutputEngType);
-                };
-            }
-        }
-
-        TrackingSessCbHandler(LocationClientApiImpl *pClientApiImpl, ResponseCb rspCb,
-                EngineReportCbs engineReportCbs, uint32_t intervalInMs) {
-
-            memset(&mCallbackOptions, 0, sizeof(LocationCallbacks));
-            mCallbackOptions.size =  sizeof(LocationCallbacks);
-            if (engineReportCbs.engLocationsCallback) {
-                mCallbackOptions.engineLocationsInfoCb =
-                        [pClientApiImpl, engineLocCb=engineReportCbs.engLocationsCallback,
-                        extendedLocDataCb=engineReportCbs.gnssExtendedDataInfoCallback]
-                        (uint32_t count,
-                        ::GnssLocationInfoNotification* engineLocationInfoNotification) {
-
-                    std::vector<GnssLocation> engLocationsVector;
-                    std::vector<uint8_t> extendedDataVector;
-                    for (int i=0; i< count; i++) {
-                        GnssLocation gnssLocation =
-                            LocationClientApiImpl::parseLocationInfo(
-                                    engineLocationInfoNotification[i]);
-                        engLocationsVector.push_back(gnssLocation);
-                        pClientApiImpl->logLocation(gnssLocation,
-                                                    LOC_REPORT_TRIGGER_ENGINE_TRACKING_SESSION);
-                        if ((LOC_OUTPUT_ENGINE_SPE == gnssLocation.locOutputEngType) &&
-                                 extendedLocDataCb) {
-                            const ::GnssLocationInfoNotification &halLocationInfo =
-                                    engineLocationInfoNotification[i];
-
-                            if ((halLocationInfo.flags &
-                                    LDT_GNSS_LOCATION_INFO_EXTENDED_DATA_BIT) &&
-                                    halLocationInfo.extendedDataLen > 0) {
-                                //Copy extendedData to extendedDatastr
-                                if (halLocationInfo.extendedDataLen <= sizeof(
-                                        halLocationInfo.extendedData)) {
-                                    extendedDataVector.insert(extendedDataVector.end(),
-                                            &halLocationInfo.extendedData[0],
-                                            &halLocationInfo.extendedData[
-                                                    halLocationInfo.extendedDataLen]);
-                                }
-                            }
-                        }
-                    }
-                    engineLocCb(engLocationsVector);
-                    // Call ExtendedData Data callback
-                    if (extendedLocDataCb && extendedDataVector.size() > 0) {
-                        pClientApiImpl->getLogger().log(1, extendedDataVector);
-                        extendedLocDataCb(extendedDataVector);
-                    }
-                };
-            }
-            if (!engineReportCbs.nmeaSentencesCallback && !engineReportCbs.engineNmeaCallback
-                    && engineReportCbs.gnssNmeaCallback) {
-                initializeCommonCbs(pClientApiImpl, rspCb,
-                    engineReportCbs.gnssSvCallback,
-                    engineReportCbs.gnssNmeaCallback,
-                    engineReportCbs.gnssDataCallback,
-                    engineReportCbs.gnssMeasurementsCallback,
-                    engineReportCbs.gnssNHzMeasurementsCallback,
-                    engineReportCbs.gnssDcReportCallback,
-                    engineReportCbs.gnssEphReportCallback,
-                    intervalInMs);
-            } else {
-                initializeCommonCbs(pClientApiImpl, rspCb,
-                    engineReportCbs.gnssSvCallback, 0,
-                    engineReportCbs.gnssDataCallback,
-                    engineReportCbs.gnssMeasurementsCallback,
-                    engineReportCbs.gnssNHzMeasurementsCallback,
-                    engineReportCbs.gnssDcReportCallback,
-                    engineReportCbs.gnssEphReportCallback,
-                    intervalInMs);
-            }
-
-            if (!engineReportCbs.nmeaSentencesCallback && engineReportCbs.engineNmeaCallback) {
-                mCallbackOptions.engineNmeaCb =
-                [pClientApiImpl, engineNmeaCallback = engineReportCbs.engineNmeaCallback](
-                        const ::GnssNmeaNotification& n) {
-                    uint64_t timestamp = n.timestamp;
-                    LocOutputEngineType locOutputEngType = (LocOutputEngineType)n.locOutputEngType;
-                    std::string nmea(n.nmea);
-                    LOC_LOGv("<<< message = nmea[%s] locOutputEngType = %d", nmea.c_str(),
-                        locOutputEngType);
-                    std::stringstream ss(nmea);
-                    std::string each;
-                    while (std::getline(ss, each, '\n')) {
-                        each += '\n';
-                        engineNmeaCallback(locOutputEngType, timestamp, each);
-                    }
-                    pClientApiImpl->getLogger().log(timestamp, nmea.size(), nmea.c_str(),
-                            locOutputEngType);
-                };
-            } else if (engineReportCbs.nmeaSentencesCallback) {
-                mCallbackOptions.engineNmeaCb =
-                [pClientApiImpl, nmeaSentencesCallback =
-                        engineReportCbs.nmeaSentencesCallback](
-                        ::GnssNmeaNotification n) {
-                    uint64_t timestamp = n.timestamp;
-                    LocOutputEngineType locOutputEngType = (LocOutputEngineType)n.locOutputEngType;
-                    std::string nmea(n.nmea);
-                    LOC_LOGv("<<< message = nmea[%s] locOutputEngType = %d", nmea.c_str(),
-                        locOutputEngType);
-                    nmeaSentencesCallback(locOutputEngType, timestamp, nmea);
-                    pClientApiImpl->getLogger().log(timestamp, nmea.size(), nmea.c_str(),
-                            locOutputEngType);
-               };
-            }
-        }
-
-        LocationCallbacks& getLocationCbs() { return mCallbackOptions; }
-
-    private:
-        LocationCallbacks mCallbackOptions;
-        void initializeCommonCbs(LocationClientApiImpl *pClientApiImpl,
-                                 ResponseCb rspCb,
-                                 GnssSvCb gnssSvCallback,
-                                 GnssNmeaCb gnssNmeaCallback,
-                                 GnssDataCb gnssDataCallback,
-                                 GnssMeasurementsCb gnssMeasurementsCallback,
-                                 GnssMeasurementsCb gnssNHzMeasurementsCallback,
-                                 GnssDcReportCb gnssDcReportCallback,
-                                 GnssEphReportCb gnssEphReportCallback,
-                                 uint32_t intervalInMs);
-};
-
-void TrackingSessCbHandler::initializeCommonCbs(LocationClientApiImpl *pClientApiImpl,
-        ResponseCb rspCb, GnssSvCb gnssSvCallback, GnssNmeaCb gnssNmeaCallback,
-        GnssDataCb gnssDataCallback, GnssMeasurementsCb gnssMeasurementsCallback,
-        GnssMeasurementsCb gnssNHzMeasurementsCallback,
-        GnssDcReportCb gnssDcReportCallback, GnssEphReportCb gnssEphReportCallback,
-        uint32_t intervalInMs) {
-    // callback masks
-    if (rspCb) {
-        mCallbackOptions.responseCb = [rspCb](::LocationError err, uint32_t id) {
-            LocationResponse response = LocationClientApiImpl::parseLocationError(err);
-            rspCb(response);
-        };
-    }
-
-    if (gnssSvCallback) {
-        mCallbackOptions.gnssSvCb =
-                [pClientApiImpl, gnssSvCallback](::GnssSvNotification n) {
-            std::vector<GnssSv> gnssSvsVector;
-            for (int i=0; i< n.count; i++) {
-                GnssSv gnssSv;
-                gnssSv = LocationClientApiImpl::parseGnssSv(n.gnssSvs[i]);
-                gnssSvsVector.push_back(gnssSv);
-            }
-            gnssSvCallback(gnssSvsVector);
-            pClientApiImpl->getLogger().log(gnssSvsVector);
-        };
-    }
-    if (gnssNmeaCallback) {
-        mCallbackOptions.gnssNmeaCb =
-                [pClientApiImpl, gnssNmeaCallback](const ::GnssNmeaNotification& n) {
-            uint64_t timestamp = n.timestamp;
-            LocOutputEngineType locOutputEngType = (LocOutputEngineType)n.locOutputEngType;
-            std::string nmea(n.nmea);
-            LOC_LOGv("<<< message = nmea[%s]", nmea.c_str());
-            std::stringstream ss(nmea);
-            std::string each;
-            while (std::getline(ss, each, '\n')) {
-                each += '\n';
-                gnssNmeaCallback(timestamp, each);
-            }
-            pClientApiImpl->getLogger().log(timestamp, nmea.size(), nmea.c_str(), locOutputEngType);
-        };
-    }
-    if (gnssDataCallback) {
-        mCallbackOptions.gnssDataCb =
-                [pClientApiImpl, gnssDataCallback] (const ::GnssDataNotification& n) {
-            GnssData gnssData = LocationClientApiImpl::parseGnssData(n);
-            gnssDataCallback(gnssData);
-            pClientApiImpl->getLogger().log(gnssData);
-       };
-    }
-    if (gnssMeasurementsCallback) {
-        mCallbackOptions.gnssMeasurementsCb =
-                [pClientApiImpl, gnssMeasurementsCallback](
-                    const ::GnssMeasurementsNotification &n) {
-            GnssMeasurements gnssMeasurements =
-                        LocationClientApiImpl::parseGnssMeasurements(n);
-            gnssMeasurementsCallback(gnssMeasurements);
-            pClientApiImpl->getLogger().log(gnssMeasurements);
-        };
-    }
-    if (gnssNHzMeasurementsCallback) {
-        if (intervalInMs > 100) {
-            LOC_LOGe("nHz measurement not supported with TBF of %d", intervalInMs);
-        } else {
-            mCallbackOptions.gnssNHzMeasurementsCb =
-                    [pClientApiImpl, gnssNHzMeasurementsCallback](
-                    const ::GnssMeasurementsNotification &n) {
-                GnssMeasurements gnssMeasurements =
-                        LocationClientApiImpl::parseGnssMeasurements(n);
-                gnssNHzMeasurementsCallback(gnssMeasurements);
-                pClientApiImpl->getLogger().log(gnssMeasurements);
-            };
-        }
-    }
-    if (gnssDcReportCallback) {
-        mCallbackOptions.gnssDcReportCb =
-                [pClientApiImpl, gnssDcReportCallback](::GnssDcReportInfo n) {
-            GnssDcReport gnssDcReport =
-                        LocationClientApiImpl::parseDcReport(n);
-            gnssDcReportCallback(gnssDcReport);
-            pClientApiImpl->getLogger().log(gnssDcReport);
-        };
-    }
-
-    if (gnssEphReportCallback) {
-        mCallbackOptions.svEphemerisCb =
-                [pClientApiImpl, gnssEphReportCallback](
-                const ::GnssSvEphemerisReport &n) {
-            GnssEphemeris gnssEphInfo =
-                    LocationClientApiImpl::parseGnssEphemerisInfo(n);
-            gnssEphReportCallback(gnssEphInfo);
-            pClientApiImpl->getLogger().log(gnssEphInfo);
-        };
-    }
-}
-
 /******************************************************************************
 LocationClientApi
 ******************************************************************************/
-LocationClientApi::LocationClientApi(CapabilitiesCb capaCb) {
-    capabilitiesCallback capabilitiesCb = nullptr;
-    if (capaCb) {
-        capabilitiesCb = [capaCb] (LocationCapabilitiesMask capabilitiesMask) {
-           LocationCapabilitiesMask capsMask =
-                LocationClientApiImpl::parseCapabilitiesMask(capabilitiesMask);
-           capaCb(capsMask);
-        };
-    }
-    mApiImpl = new LocationClientApiImpl(capabilitiesCb);
-    if (!mApiImpl) {
-        LOC_LOGe ("mApiImpl creation failed.");
-    }
+LocationClientApi::LocationClientApi(CapabilitiesCb capabitiescb) :
+        mApiImpl(new LocationClientApiImpl(capabitiescb)) {
 }
 
 LocationClientApi::~LocationClientApi() {
@@ -378,7 +69,7 @@ bool LocationClientApi::startPositionSession(
         ResponseCb responseCallback) {
 
     loc_boot_kpi_marker("L - LCA ST-SPS %s %d",
-            getprogname(), intervalInMs);
+            "location_client_api", intervalInMs);
     //Input parameter check
     if (!locationCallback) {
         LOC_LOGe ("NULL locationCallback");
@@ -390,32 +81,26 @@ bool LocationClientApi::startPositionSession(
         return false;
     }
 
+    // callback functions
+    ClientCallbacks cbs = {0};
+    cbs.responsecb = responseCallback;
+    cbs.locationcb = locationCallback;
+    mApiImpl->updateCallbackFunctions(cbs);
+
     // callback masks
-    LocationCallbacks callbacksOption = {};
-    callbacksOption.size =  sizeof(LocationCallbacks);
-
-    if (responseCallback) {
-        callbacksOption.responseCb = [responseCallback](::LocationError err, uint32_t id) {
-            LocationResponse response = LocationClientApiImpl::parseLocationError(err);
-            responseCallback(response);
-        };
-    }
-
-    callbacksOption.trackingCb = [this, locationCallback](const ::Location& loc) {
-        Location location = LocationClientApiImpl::parseLocation(loc);
-        locationCallback(location);
-        mApiImpl->logLocation(location, LOC_REPORT_TRIGGER_SIMPLE_TRACKING_SESSION);
-    };
+    LocationCallbacks callbacksOption = {0};
+    callbacksOption.responseCb = [](::LocationError err, uint32_t id) {};
+    callbacksOption.trackingCb = [](::Location n) {};
+    mApiImpl->updateCallbacks(callbacksOption);
 
     // options
     LocationOptions locationOption;
+    TrackingOptions trackingOption;
     locationOption.size = sizeof(locationOption);
     locationOption.minInterval = intervalInMs;
     locationOption.minDistance = distanceInMeters;
-    locationOption.qualityLevelAccepted = QUALITY_ANY_OR_FAILED_FIX;
-
-    TrackingOptions trackingOption(locationOption);
-    mApiImpl->startPositionSession(callbacksOption, trackingOption);
+    trackingOption.setLocationOptions(locationOption);
+    mApiImpl->startTracking(trackingOption);
     return true;
 }
 
@@ -425,25 +110,54 @@ bool LocationClientApi::startPositionSession(
         ResponseCb responseCallback) {
 
     loc_boot_kpi_marker("L - LCA EX-SPS %s %d",
-            getprogname(), intervalInMs);
+            "location_client_api", intervalInMs);
 
     if (!mApiImpl) {
         LOC_LOGe ("NULL mApiImpl");
         return false;
     }
 
-    TrackingSessCbHandler cbHandler(mApiImpl, responseCallback, gnssReportCallbacks,
-            intervalInMs);
+    // callback functions
+    ClientCallbacks cbs = {0};
+    cbs.responsecb = responseCallback;
+    cbs.gnssreportcbs = gnssReportCallbacks;
+    mApiImpl->updateCallbackFunctions(cbs, REPORT_CB_GNSS_INFO);
+
+    // callback masks
+    LocationCallbacks callbacksOption = {0};
+    callbacksOption.responseCb = [](::LocationError err, uint32_t id) {};
+    if (gnssReportCallbacks.gnssLocationCallback) {
+        callbacksOption.gnssLocationInfoCb = [](::GnssLocationInfoNotification n) {};
+    }
+    if (gnssReportCallbacks.gnssSvCallback) {
+        callbacksOption.gnssSvCb = [](::GnssSvNotification n) {};
+    }
+    if (gnssReportCallbacks.gnssNmeaCallback) {
+        callbacksOption.gnssNmeaCb = [](::GnssNmeaNotification n) {};
+    }
+    if (gnssReportCallbacks.gnssDataCallback) {
+       callbacksOption.gnssDataCb = [] (::GnssDataNotification n) {};
+    }
+    if (gnssReportCallbacks.gnssMeasurementsCallback) {
+        callbacksOption.gnssMeasurementsCb = [](::GnssMeasurementsNotification n) {};
+    }
+    if (gnssReportCallbacks.gnssNHzMeasurementsCallback) {
+        if (intervalInMs > 100) {
+            LOC_LOGe("nHz measurement not supported with TBF of %d", intervalInMs);
+        } else {
+            callbacksOption.gnssNHzMeasurementsCb = [](::GnssMeasurementsNotification n) {};
+        }
+    }
+    mApiImpl->updateCallbacks(callbacksOption);
 
     // options
     LocationOptions locationOption;
+    TrackingOptions trackingOption;
     locationOption.size = sizeof(locationOption);
     locationOption.minInterval = intervalInMs;
     locationOption.minDistance = 0;
-    locationOption.qualityLevelAccepted = QUALITY_ANY_OR_FAILED_FIX;
-
-    TrackingOptions trackingOption(locationOption);
-    mApiImpl->startPositionSession(cbHandler.getLocationCbs(), trackingOption);
+    trackingOption.setLocationOptions(locationOption);
+    mApiImpl->startTracking(trackingOption);
     return true;
 }
 
@@ -454,37 +168,70 @@ bool LocationClientApi::startPositionSession(
         ResponseCb responseCallback) {
 
     loc_boot_kpi_marker("L - LCA Fused-SPS %s %d",
-            getprogname(), intervalInMs);
+            "location_client_api", intervalInMs);
     if (!mApiImpl) {
         LOC_LOGe ("NULL mApiImpl");
         return false;
     }
 
-    TrackingSessCbHandler cbHandler(mApiImpl, responseCallback, engReportCallbacks, intervalInMs);
+    // callback functions
+    ClientCallbacks cbs = {0};
+    cbs.responsecb = responseCallback;
+    cbs.engreportcbs = engReportCallbacks;
+    mApiImpl->updateCallbackFunctions(cbs, REPORT_CB_ENGINE_INFO);
+
+    // callback masks
+    LocationCallbacks callbacksOption = {0};
+    callbacksOption.responseCb = [](::LocationError err, uint32_t id) {};
+
+    if (engReportCallbacks.engLocationsCallback) {
+        callbacksOption.engineLocationsInfoCb =
+                [](uint32_t count, ::GnssLocationInfoNotification* locArr) {};
+    }
+    if (engReportCallbacks.gnssSvCallback) {
+        callbacksOption.gnssSvCb = [](::GnssSvNotification n) {};
+    }
+    if (engReportCallbacks.gnssNmeaCallback) {
+        callbacksOption.gnssNmeaCb = [](::GnssNmeaNotification n) {};
+    }
+    if (engReportCallbacks.gnssDataCallback) {
+       callbacksOption.gnssDataCb = [] (::GnssDataNotification n) {};
+    }
+    if (engReportCallbacks.gnssMeasurementsCallback) {
+        callbacksOption.gnssMeasurementsCb = [](::GnssMeasurementsNotification n) {};
+    }
+    if (engReportCallbacks.gnssNHzMeasurementsCallback) {
+        if (intervalInMs > 100) {
+            LOC_LOGe("nHz measurement not supported with TBF of %d", intervalInMs);
+        } else {
+            callbacksOption.gnssNHzMeasurementsCb = [](::GnssMeasurementsNotification n) {};
+        }
+    }
+    mApiImpl->updateCallbacks(callbacksOption);
 
     // options
     LocationOptions locationOption;
+    TrackingOptions trackingOption;
     locationOption.size = sizeof(locationOption);
     locationOption.minInterval = intervalInMs;
     locationOption.minDistance = 0;
     locationOption.locReqEngTypeMask =(::LocReqEngineTypeMask)locEngReqMask;
-    locationOption.qualityLevelAccepted = QUALITY_ANY_OR_FAILED_FIX;
+    trackingOption.setLocationOptions(locationOption);
 
-    TrackingOptions trackingOption(locationOption);
-    mApiImpl->startPositionSession(cbHandler.getLocationCbs(), trackingOption);
+    mApiImpl->startTracking(trackingOption);
     return true;
 }
 
 void LocationClientApi::stopPositionSession() {
     if (mApiImpl) {
-        mApiImpl->stopTrackingAndClearSubscriptions(0);
+        mApiImpl->stopTracking(0);
     }
 }
 
 bool LocationClientApi::startTripBatchingSession(uint32_t minInterval, uint32_t tripDistance,
-        BatchingCb batchingCb, ResponseCb rspCb) {
+        BatchingCb batchingCallback, ResponseCb responseCallback) {
     //Input parameter check
-    if (!batchingCb) {
+    if (!batchingCallback) {
         LOC_LOGe ("NULL batchingCallback");
         return false;
     }
@@ -493,38 +240,20 @@ bool LocationClientApi::startTripBatchingSession(uint32_t minInterval, uint32_t 
         LOC_LOGe ("NULL mApiImpl");
         return false;
     }
+    // callback functions
+    ClientCallbacks cbs = {0};
+    cbs.responsecb = responseCallback;
+    cbs.batchingcb = batchingCallback;
+    mApiImpl->updateCallbackFunctions(cbs);
 
     // callback masks
-    LocationCallbacks callbacksOption = {};
-    callbacksOption.size = sizeof(LocationCallbacks);
-
-    if (rspCb) {
-        callbacksOption.responseCb = [rspCb] (::LocationError err, uint32_t id) {
-                LocationResponse response = LocationClientApiImpl::parseLocationError(err);
-                rspCb(response);
-        };
-    }
-
-    callbacksOption.batchingCb = [batchingCb] (size_t count, ::Location* location,
-            const BatchingOptions& batchingOptions) {
-        std::vector<Location> locationVector;
-        BatchingStatus status = ((count != 0 )? BATCHING_STATUS_ACTIVE : BATCHING_STATUS_INACTIVE);
-        LOC_LOGd("Batch count : %zu", count);
-        for (int i=0; i < count; i++) {
-            locationVector.push_back(LocationClientApiImpl::parseLocation(
-                        location[i]));
-        }
-        batchingCb(locationVector, status);
-    };
-
-    callbacksOption.batchingStatusCb = [batchingCb](const BatchingStatusInfo& batchingSt,
-            std::list<uint32_t>& listOfcompletedTrips) {
-        if (BATCHING_STATUS_TRIP_COMPLETED == batchingSt.batchingStatus) {
-            std::vector<Location> locationVector;
-            BatchingStatus status = BATCHING_STATUS_DONE;
-            batchingCb(locationVector, status);
-        }
-    };
+    LocationCallbacks callbacksOption = {0};
+    callbacksOption.responseCb = [](::LocationError err, uint32_t id) {};
+    callbacksOption.batchingCb = [](size_t count, ::Location* location,
+            BatchingOptions batchingOptions) {};
+    callbacksOption.batchingStatusCb = [](BatchingStatusInfo batchingStatus,
+            std::list<uint32_t>& listOfcompletedTrips) {};
+    mApiImpl->updateCallbacks(callbacksOption);
 
     LocationOptions locOption = {};
     locOption.size = sizeof(locOption);
@@ -536,15 +265,14 @@ bool LocationClientApi::startTripBatchingSession(uint32_t minInterval, uint32_t 
     batchOption.size = sizeof(batchOption);
     batchOption.batchingMode = BATCHING_MODE_TRIP;
     batchOption.setLocationOptions(locOption);
-
-    mApiImpl->startBatchingSession(callbacksOption, batchOption);
+    mApiImpl->startBatching(batchOption);
     return true;
 }
 
 bool LocationClientApi::startRoutineBatchingSession(uint32_t minInterval, uint32_t minDistance,
-        BatchingCb batchingCb, ResponseCb rspCb) {
+        BatchingCb batchingCallback, ResponseCb responseCallback) {
     //Input parameter check
-    if (!batchingCb) {
+    if (!batchingCallback) {
         LOC_LOGe ("NULL batchingCallback");
         return false;
     }
@@ -553,32 +281,18 @@ bool LocationClientApi::startRoutineBatchingSession(uint32_t minInterval, uint32
         LOC_LOGe ("NULL mApiImpl");
         return false;
     }
+    // callback functions
+    ClientCallbacks cbs = {0};
+    cbs.responsecb = responseCallback;
+    cbs.batchingcb = batchingCallback;
+    mApiImpl->updateCallbackFunctions(cbs);
 
     // callback masks
-    LocationCallbacks callbacksOption = {};
-    callbacksOption.size =  sizeof(LocationCallbacks);
-
-    if (rspCb) {
-        callbacksOption.responseCb = [rspCb](::LocationError err, uint32_t id) {
-            LocationResponse response = LocationClientApiImpl::parseLocationError(err);
-            rspCb(response);
-        };
-    }
-
-    callbacksOption.batchingCb = [batchingCb](size_t count, ::Location* location,
-            const BatchingOptions& batchingOptions) {
-        std::vector<Location> locationVector;
-        BatchingStatus status = BATCHING_STATUS_INACTIVE;
-        LOC_LOGd("Batch count : %zu", count);
-        if (count) {
-            for (int i=0; i < count; i++) {
-                locationVector.push_back(LocationClientApiImpl::parseLocation(
-                            location[i]));
-            }
-            status = BATCHING_STATUS_ACTIVE;
-        }
-        batchingCb(locationVector, status);
-    };
+    LocationCallbacks callbacksOption = {0};
+    callbacksOption.responseCb = [](::LocationError err, uint32_t id) {};
+    callbacksOption.batchingCb = [](size_t count, ::Location* location,
+            BatchingOptions batchingOptions) {};
+    mApiImpl->updateCallbacks(callbacksOption);
 
     LocationOptions locOption = {};
     locOption.size = sizeof(locOption);
@@ -590,7 +304,7 @@ bool LocationClientApi::startRoutineBatchingSession(uint32_t minInterval, uint32
     batchOption.size = sizeof(batchOption);
     batchOption.batchingMode = BATCHING_MODE_ROUTINE;
     batchOption.setLocationOptions(locOption);
-    mApiImpl->startBatchingSession(callbacksOption, batchOption);
+    mApiImpl->startBatching(batchOption);
     return true;
 }
 
@@ -602,7 +316,7 @@ void LocationClientApi::stopBatchingSession() {
 
 void LocationClientApi::addGeofences(std::vector<Geofence>& geofences,
         GeofenceBreachCb gfBreachCb,
-        CollectiveResponseCb collRspCb) {
+        CollectiveResponseCb responseCallback) {
     //Input parameter check
     if (!gfBreachCb) {
         LOC_LOGe ("NULL GeofenceBreachCb");
@@ -612,58 +326,47 @@ void LocationClientApi::addGeofences(std::vector<Geofence>& geofences,
         LOC_LOGe ("NULL mApiImpl");
         return;
     }
+    // callback functions
+    ClientCallbacks cbs = {0};
+    cbs.collectivecb = responseCallback;
+    cbs.gfbreachcb = gfBreachCb;
+    mApiImpl->updateCallbackFunctions(cbs);
 
     // callback masks
-    LocationCallbacks callbacksOption = {};
-    callbacksOption.size =  sizeof(LocationCallbacks);
-
+    LocationCallbacks callbacksOption = {0};
     callbacksOption.responseCb = [](LocationError err, uint32_t id) {};
+    callbacksOption.collectiveResponseCb = [](size_t, LocationError*, uint32_t*) {};
+    callbacksOption.geofenceBreachCb = [](GeofenceBreachNotification geofenceBreachNotification)
+            {};
+    mApiImpl->updateCallbacks(callbacksOption);
+    size_t count = geofences.size();
+    mApiImpl->mLastAddedClientIds.clear();
+    if (count > 0) {
+        GeofenceOption* gfOptions = (GeofenceOption*)malloc(sizeof(GeofenceOption) * count);
+        GeofenceInfo* gfInfos = (GeofenceInfo*)malloc(sizeof(GeofenceInfo) * count);
 
-    if (collRspCb) {
-        callbacksOption.collectiveResponseCb = [this, collRspCb](size_t count,
-                LocationError* errs, uint32_t* ids) {
-                std::vector<pair<Geofence, LocationResponse>> responses;
-                LOC_LOGd("CollectiveRes Pload count: %zu", count);
-                if (errs != nullptr && ids != nullptr) {
-                    for (int i=0; i < count; i++) {
-                        responses.push_back(make_pair(
-                                    mApiImpl->getMappedGeofence(ids[i]),
-                                    LocationClientApiImpl::parseLocationError(errs[i])));
-                    }
-                    collRspCb(responses);
-                }
-        };
-    }
-
-    callbacksOption.geofenceBreachCb =
-            [this, gfBreachCb](const GeofenceBreachNotification& geofenceBreachNotification) {
-        std::vector<Geofence> geofences;
-        int gfBreachCnt = geofenceBreachNotification.count;
-        for (int i=0; i < gfBreachCnt; i++) {
-            geofences.push_back(mApiImpl->getMappedGeofence(
-                                    geofenceBreachNotification.ids[i]));
-        }
-
-        gfBreachCb(geofences,
-                LocationClientApiImpl::parseLocation(geofenceBreachNotification.location),
-                LocationClientApiImpl::parseGeofenceBreachType(geofenceBreachNotification.type),
-                geofenceBreachNotification.timestamp);
-    };
-
-    std::vector<Geofence> geofencesToAdd;
-    for (int i = 0; i < geofences.size(); ++i) {
-        if (!geofences[i].mGeofenceImpl) {
+        for (int i=0; i<count; ++i) {
+            if (geofences[i].mGeofenceImpl) {
+                continue;
+            }
+            gfOptions[i].breachTypeMask = geofences[i].getBreachType();
+            gfOptions[i].responsiveness = geofences[i].getResponsiveness();
+            gfOptions[i].dwellTime = geofences[i].getDwellTime();
+            gfOptions[i].size = sizeof(gfOptions[i]);
+            gfInfos[i].latitude = geofences[i].getLatitude();
+            gfInfos[i].longitude = geofences[i].getLongitude();
+            gfInfos[i].radius = geofences[i].getRadius();
+            gfInfos[i].size = sizeof(gfInfos[i]);
             std::shared_ptr<GeofenceImpl> gfImpl(new GeofenceImpl(&geofences[i]));
             gfImpl->bindGeofence(&geofences[i]);
-            geofencesToAdd.emplace_back(geofences[i]);
+            mApiImpl->mLastAddedClientIds.push_back(gfImpl->getClientId());
+            LOC_LOGd("Geofence LastAddedClientId: %d", gfImpl->getClientId());
+            mApiImpl->addGeofenceMap(mApiImpl->mLastAddedClientIds[i], geofences[i]);
         }
-    }
 
-    if (!geofencesToAdd.size()) {
-        LOC_LOGe ("Empty geofences");
-        return;
+        mApiImpl->addGeofences(geofences.size(), reinterpret_cast<GeofenceOption*>(gfOptions),
+                reinterpret_cast<GeofenceInfo*>(gfInfos));
     }
-    mApiImpl->addGeofences(callbacksOption, geofencesToAdd);
 }
 void LocationClientApi::removeGeofences(std::vector<Geofence>& geofences) {
     if (!mApiImpl) {
@@ -673,11 +376,6 @@ void LocationClientApi::removeGeofences(std::vector<Geofence>& geofences) {
     size_t count = geofences.size();
     if (count > 0) {
         uint32_t* gfIds = (uint32_t*)malloc(sizeof(uint32_t) * count);
-        if (nullptr == gfIds) {
-            LOC_LOGe("Failed to allocate memory for Geofence Id's");
-            return;
-        }
-
         for (int i=0; i<count; ++i) {
             if (!geofences[i].mGeofenceImpl) {
                 LOC_LOGe ("Geofence not added yet");
@@ -686,6 +384,11 @@ void LocationClientApi::removeGeofences(std::vector<Geofence>& geofences) {
             }
             gfIds[i] = geofences[i].mGeofenceImpl->getClientId();
             LOC_LOGd("removeGeofences id : %d", gfIds[i]);
+        }
+        if (!mApiImpl->checkGeofenceMap(geofences.size(), gfIds)) {
+            LOC_LOGe ("Wrong geofence IDs");
+            free(gfIds);
+            return;
         }
         mApiImpl->removeGeofences(count, gfIds);
     }
@@ -698,18 +401,7 @@ void LocationClientApi::modifyGeofences(std::vector<Geofence>& geofences) {
     size_t count = geofences.size();
     if (count > 0) {
         GeofenceOption* gfOptions = (GeofenceOption*)malloc(sizeof(GeofenceOption) * count);
-        if (nullptr == gfOptions) {
-            LOC_LOGe("Failed to allocate memory for Geofence Options");
-            return;
-        }
-
         uint32_t* gfIds = (uint32_t*)malloc(sizeof(uint32_t) * count);
-        if (nullptr == gfIds) {
-            LOC_LOGe("Failed to allocate memory for Geofence Id's");
-            free(gfOptions);
-            return;
-        }
-
         for (int i=0; i<count; ++i) {
             gfOptions[i].breachTypeMask = geofences[i].getBreachType();
             gfOptions[i].responsiveness = geofences[i].getResponsiveness();
@@ -724,7 +416,12 @@ void LocationClientApi::modifyGeofences(std::vector<Geofence>& geofences) {
             gfIds[i] = geofences[i].mGeofenceImpl->getClientId();
             LOC_LOGd("modifyGeofences id : %d", gfIds[i]);
         }
-
+        if (!mApiImpl->checkGeofenceMap(geofences.size(), gfIds)) {
+            LOC_LOGe ("Wrong geofence IDs");
+            free(gfIds);
+            free(gfOptions);
+            return;
+        }
         mApiImpl->modifyGeofences(geofences.size(), const_cast<uint32_t*>(gfIds),
                 reinterpret_cast<GeofenceOption*>(gfOptions));
     }
@@ -738,11 +435,6 @@ void LocationClientApi::pauseGeofences(std::vector<Geofence>& geofences) {
     size_t count = geofences.size();
     if (count > 0) {
         uint32_t* gfIds = (uint32_t*)malloc(sizeof(uint32_t) * count);
-        if (nullptr == gfIds) {
-            LOC_LOGe("Failed to allocate memory for Geofence Id's");
-            return;
-        }
-
         for (int i=0; i<count; ++i) {
             if (!geofences[i].mGeofenceImpl) {
                 LOC_LOGe ("Geofence not added yet");
@@ -751,6 +443,11 @@ void LocationClientApi::pauseGeofences(std::vector<Geofence>& geofences) {
             }
             gfIds[i] = geofences[i].mGeofenceImpl->getClientId();
             LOC_LOGd("pauseGeofences id : %d", gfIds[i]);
+        }
+        if (!mApiImpl->checkGeofenceMap(geofences.size(), gfIds)) {
+            LOC_LOGe ("Wrong geofence IDs");
+            free(gfIds);
+            return;
         }
         mApiImpl->pauseGeofences(count, gfIds);
     }
@@ -764,11 +461,6 @@ void LocationClientApi::resumeGeofences(std::vector<Geofence>& geofences) {
     size_t count = geofences.size();
     if (count > 0) {
         uint32_t* gfIds = (uint32_t*)malloc(sizeof(uint32_t) * count);
-        if (nullptr == gfIds) {
-            LOC_LOGe("Failed to allocate memory for Geofence Id's");
-            return;
-        }
-
         for (int i=0; i<count; ++i) {
             if (!geofences[i].mGeofenceImpl) {
                 LOC_LOGe ("Geofence not added yet");
@@ -777,6 +469,11 @@ void LocationClientApi::resumeGeofences(std::vector<Geofence>& geofences) {
             }
             gfIds[i] = geofences[i].mGeofenceImpl->getClientId();
             LOC_LOGd("resumeGeofences id : %d", gfIds[i]);
+        }
+        if (!mApiImpl->checkGeofenceMap(geofences.size(), gfIds)) {
+            LOC_LOGe ("Wrong geofence IDs");
+            free(gfIds);
+            return;
         }
         mApiImpl->resumeGeofences(count, gfIds);
     }
@@ -789,60 +486,28 @@ void LocationClientApi::updateNetworkAvailability(bool available) {
 }
 
 void LocationClientApi::getGnssEnergyConsumed(
-        GnssEnergyConsumedCb gnssEnergyConsumedCb,
-        ResponseCb responseCb) {
+        GnssEnergyConsumedCb gnssEnergyConsumedCallback,
+        ResponseCb responseCallback) {
 
-    if (!gnssEnergyConsumedCb) {
-        if (responseCb) {
-            responseCb(LOCATION_RESPONSE_PARAM_INVALID);
+    if (!gnssEnergyConsumedCallback) {
+        if (responseCallback) {
+            responseCallback(LOCATION_RESPONSE_PARAM_INVALID);
         }
     } else if (mApiImpl) {
-        responseCallback responseCbFn = nullptr;
-
-        if (responseCb) {
-            responseCbFn = [responseCb](::LocationError err, uint32_t id) {
-                LocationResponse response = LocationClientApiImpl::parseLocationError(err);
-                responseCb(response);
-            };
-        }
-
-        gnssEnergyConsumedCallback gnssEnergyConsumedCbFn = [this, gnssEnergyConsumedCb] (
-                const ::GnssEnergyConsumedInfo& gnssEnergyConsumed) {
-            GnssEnergyConsumedInfo gnssEnergyConsumedInfo =
-                    LocationClientApiImpl::parseGnssConsumedInfo(gnssEnergyConsumed);
-            gnssEnergyConsumedCb(gnssEnergyConsumedInfo);
-        };
-
-        mApiImpl->getGnssEnergyConsumed(gnssEnergyConsumedCbFn, responseCbFn);
+        mApiImpl->getGnssEnergyConsumed(gnssEnergyConsumedCallback,
+                                        responseCallback);
     } else {
         LOC_LOGe ("NULL mApiImpl");
     }
 }
 
 void LocationClientApi::updateLocationSystemInfoListener(
-    LocationSystemInfoCb locSystemInfoCb,
-    ResponseCb responseCb) {
+    LocationSystemInfoCb locSystemInfoCallback,
+    ResponseCb responseCallback) {
 
     if (mApiImpl) {
-        responseCallback responseCbFn = nullptr;
-        locationSystemInfoCallback locSystemInfoCbFn = nullptr;
-
-        if (responseCb) {
-            responseCbFn = [responseCb](::LocationError err, uint32_t id) {
-                LocationResponse response = LocationClientApiImpl::parseLocationError(err);
-                responseCb(response);
-            };
-        }
-
-        if (locSystemInfoCb) {
-            locSystemInfoCbFn = [locSystemInfoCb] (::LocationSystemInfo locationSystem) {
-                LocationSystemInfo locationSystemInfo =
-                        LocationClientApiImpl::parseLocationSystemInfo(locationSystem);
-                locSystemInfoCb(locationSystemInfo);
-            };
-        }
-
-        mApiImpl->updateLocationSystemInfoListener(locSystemInfoCbFn, responseCbFn);
+        mApiImpl->updateLocationSystemInfoListener(
+            locSystemInfoCallback, responseCallback);
     } else {
         LOC_LOGe ("NULL mApiImpl");
     }
@@ -858,96 +523,24 @@ uint16_t LocationClientApi::getYearOfHw() {
 }
 
 void LocationClientApi::getSingleTerrestrialPosition(
-    uint32_t timeoutMsec,
-    TerrestrialTechnologyMask techMask,
-    float horQoS,
-    LocationCb terrestrialPositionCb,
-    ResponseCb responseCb) {
+        uint32_t timeoutMsec, TerrestrialTechnologyMask techMask,
+        float horQoS, LocationCb terrestrialPositionCallback,
+        ResponseCb responseCallback) {
 
     LOC_LOGd("timeout msec = %u, horQoS = %f,"
              "techMask = 0x%x", timeoutMsec, horQoS, techMask);
 
-    // null terrestrialPositionCallback means cancelling request
-    if ((terrestrialPositionCb != nullptr) &&
+    if ((terrestrialPositionCallback != nullptr) &&
             ((timeoutMsec == 0) || (techMask != TERRESTRIAL_TECH_GTP_WWAN) ||
              (horQoS != 0.0))) {
         LOC_LOGe("invalid parameter: timeout %d msec, tech mask 0x%x, horQoS %f",
                  timeoutMsec, techMask, horQoS);
-        if (responseCb) {
-            responseCb(LOCATION_RESPONSE_PARAM_INVALID);
+        if (responseCallback) {
+            responseCallback(LOCATION_RESPONSE_PARAM_INVALID);
         }
     } else if (mApiImpl) {
-        responseCallback responseCbFn = nullptr;
-        trackingCallback trackingCbFn = nullptr;
-
-        if (responseCb) {
-            responseCbFn = [responseCb](::LocationError err, uint32_t id) {
-                LocationResponse response = LocationClientApiImpl::parseLocationError(err);
-                responseCb(response);
-            };
-        }
-
-        if (terrestrialPositionCb) {
-            trackingCbFn = [this, terrestrialPositionCb](::Location loc) {
-                Location location = LocationClientApiImpl::parseLocation(loc);
-                terrestrialPositionCb(location);
-                mApiImpl->logLocation(location, LOC_REPORT_TRIGGER_SINGLE_TERRESTRIAL_FIX);
-            };
-        }
-
         mApiImpl->getSingleTerrestrialPos(timeoutMsec, ::TERRESTRIAL_TECH_GTP_WWAN, horQoS,
-                trackingCbFn, responseCbFn);
-    } else {
-        LOC_LOGe ("NULL mApiImpl");
-    }
-}
-
-void LocationClientApi::getSinglePosition(uint32_t timeoutMsec,
-                                          float horQoS,
-                                          LocationCb positionCb,
-                                          ResponseCb responseCb) {
-
-    LOC_LOGd("timeout msec = %u, horQoS = %f", timeoutMsec, horQoS);
-
-    if (positionCb != nullptr) {
-        if ((timeoutMsec == 0) || (horQoS == 0)) {
-            LOC_LOGd("invalid parameter to request single shot fix:"
-                     "timeout %d msec, horQoS %f", timeoutMsec, horQoS);
-            if (responseCb) {
-                responseCb(LOCATION_RESPONSE_PARAM_INVALID);
-            }
-            return;
-        }
-    } else {
-        LOC_LOGd("null pos cb, cancel the requeset");
-        // null positionCallback means cancelling callback
-        // set below two parameters to zero when cancelling the request
-        timeoutMsec = 0;
-        horQoS = 0;
-    }
-
-    if (mApiImpl) {
-        responseCallback responseCbFn = [responseCb](::LocationError err, uint32_t id) {
-            LocationResponse response = LocationClientApiImpl::parseLocationError(err);
-            if (responseCb){
-                responseCb(response);
-            }
-        };
-
-        if (positionCb) {
-            trackingCallback trackingCbFn = [this, positionCb](::Location loc) {
-                Location location = LocationClientApiImpl::parseLocation(loc);
-                positionCb(location);
-
-                // log the location
-                mApiImpl->logLocation(location, LOC_REPORT_TRIGGER_SINGLE_FIX);
-            };
-            mApiImpl->getSinglePos(timeoutMsec, horQoS,
-                                   trackingCbFn, responseCbFn);
-        } else {
-            mApiImpl->getSinglePos(timeoutMsec, horQoS,
-                                   nullptr, responseCbFn);
-        }
+                                          terrestrialPositionCallback, responseCallback);
     } else {
         LOC_LOGe ("NULL mApiImpl");
     }
@@ -958,8 +551,7 @@ static string maskToVals(uint64_t mask, int64_t baseNum) {
     string out;
     while (mask > 0) {
         baseNum += log2(loc_get_least_bit(mask));
-        out += baseNum;
-        out += " ";
+        out += std::to_string(baseNum) + " ";
     }
     return out;
 }
@@ -983,8 +575,7 @@ DECLARE_TBL(LocationCapabilitiesMask) = {
     {LOCATION_CAPS_QWES_CV2X_LOCATION_PREMIUM, "CV2X_LOC_PREMIUM"},
     {LOCATION_CAPS_QWES_PPE, "PPE"},
     {LOCATION_CAPS_QWES_QDR2, "QDR2"},
-    {LOCATION_CAPS_QWES_QDR3, "QDR3"},
-    {LOCATION_CAPS_NLOS_ML20, "NLOS_ML20"},
+    {LOCATION_CAPS_QWES_QDR3, "QDR3"}
 };
 // GnssSvOptionsMask
 DECLARE_TBL(GnssSvOptionsMask) = {
@@ -993,9 +584,7 @@ DECLARE_TBL(GnssSvOptionsMask) = {
     {GNSS_SV_OPTIONS_USED_IN_FIX_BIT, "USED_IN_FIX"},
     {GNSS_SV_OPTIONS_HAS_CARRIER_FREQUENCY_BIT, "CARRIER_FREQ"},
     {GNSS_SV_OPTIONS_HAS_GNSS_SIGNAL_TYPE_BIT, "SIG_TYPES"},
-    {GNSS_SV_OPTIONS_HAS_BASEBAND_CARRIER_TO_NOISE_BIT, "BASEBAND_CARRIER_TO_NOISE"},
-    {GNSS_SV_OPTIONS_HAS_ELEVATION_BIT, "ELEVATION"},
-    {GNSS_SV_OPTIONS_HAS_AZIMUTH_BIT,   "AZIMUTH"},
+    {GNSS_SV_OPTIONS_HAS_BASEBAND_CARRIER_TO_NOISE_BIT, "BASEBAND_CARRIER_TO_NOISE"}
 };
 // LocationFlagsMask
 DECLARE_TBL(LocationFlagsMask) = {
@@ -1007,13 +596,7 @@ DECLARE_TBL(LocationFlagsMask) = {
     {LOCATION_HAS_VERTICAL_ACCURACY_BIT, "VERT_ACCURACY"},
     {LOCATION_HAS_SPEED_ACCURACY_BIT, "SPEED_ACCURACY"},
     {LOCATION_HAS_BEARING_ACCURACY_BIT, "BEARING_ACCURACY"},
-    {LOCATION_HAS_TIMESTAMP_BIT, "TS"},
-    {LOCATION_HAS_ELAPSED_REAL_TIME_BIT, "ELAPSED_REAL_TIME"},
-    {LOCATION_HAS_ELAPSED_REAL_TIME_UNC_BIT, "ELAPSED_REAL_TIME_UNC"},
-    {LOCATION_HAS_TIME_UNC_BIT, "TIME_UNC"},
-    {LOCATION_HAS_GPTP_TIME_BIT, "GPTP_TIME"},
-    {LOCATION_HAS_GPTP_TIME_UNC_BIT, "GPTP_TIME_UNC"},
-    {LOCATION_HAS_SESSION_STATUS_BIT, "SESSION_STATUS"},
+    {LOCATION_HAS_BEARING_ACCURACY_BIT, "TS"}
 };
 // LocationTechnologyMask
 DECLARE_TBL(LocationTechnologyMask) = {
@@ -1025,10 +608,7 @@ DECLARE_TBL(LocationTechnologyMask) = {
     {LOCATION_TECHNOLOGY_INJECTED_COARSE_POSITION_BIT, "CPI"},
     {LOCATION_TECHNOLOGY_AFLT_BIT, "AFLT"},
     {LOCATION_TECHNOLOGY_HYBRID_BIT, "HYBRID"},
-    {LOCATION_TECHNOLOGY_PPE_BIT, "PPE"},
-    {LOCATION_TECHNOLOGY_VEH_BIT, "VEH"},
-    {LOCATION_TECHNOLOGY_VIS_BIT, "VIS"},
-    {LOCATION_TECHNOLOGY_PROPAGATED_BIT, "PROPAGATED"}
+    {LOCATION_TECHNOLOGY_PPE_BIT, "PPE"}
 };
 // GnssLocationNavSolutionMask
 DECLARE_TBL(GnssLocationNavSolutionMask) = {
@@ -1079,9 +659,7 @@ DECLARE_TBL(GnssSignalTypeMask) = {
     {GNSS_SIGNAL_BEIDOU_B2I_BIT, "BDS_B2I"},
     {GNSS_SIGNAL_BEIDOU_B2AI_BIT, "BDS_B2AI"},
     {GNSS_SIGNAL_NAVIC_L5_BIT, "NAVIC_L5"},
-    {GNSS_SIGNAL_BEIDOU_B2AQ_BIT, "BDS_B2AQ"},
-    {GNSS_SIGNAL_BEIDOU_B2BI_BIT, "BDS_B2BI"},
-    {GNSS_SIGNAL_BEIDOU_B2BQ_BIT, "BDS_B2BQ"}
+    {GNSS_SIGNAL_BEIDOU_B2AQ_BIT, "BDS_B2AQ"}
 };
 // GnssSignalTypes
 DECLARE_TBL(GnssSignalTypes) = {
@@ -1104,10 +682,7 @@ DECLARE_TBL(GnssSignalTypes) = {
     {GNSS_SIGNAL_TYPE_QZSS_L5_Q, "QZSS_L5"},
     {GNSS_SIGNAL_TYPE_SBAS_L1_CA, "SBAS_L1_CA"},
     {GNSS_SIGNAL_TYPE_NAVIC_L5, "NAVIC_L5"},
-    {GNSS_SIGNAL_TYPE_BEIDOU_B2A_Q, "BDS_B2AQ"},
-    {GNSS_SIGNAL_TYPE_BEIDOU_B2B_I, "BDS_B2BI"},
-    {GNSS_SIGNAL_TYPE_BEIDOU_B2B_Q, "BDS_B2BQ"},
-    {GNSS_SIGNAL_TYPE_NAVIC_L1, "NAVIC_L1"}
+    {GNSS_SIGNAL_TYPE_BEIDOU_B2A_Q, "BDS_B2AQ"}
 };
 // GnssSvType
 DECLARE_TBL(GnssSvType) = {
@@ -1130,50 +705,38 @@ DECLARE_TBL(Gnss_LocSvSystemEnumType) = {
     {GNSS_LOC_SV_SYSTEM_QZSS,    "QZSS"},
     {GNSS_LOC_SV_SYSTEM_NAVIC,   "NAVIC"}
 };
-// LCAGnssLocationInfoFlagMask
-DECLARE_TBL(LCAGnssLocationInfoFlagMask) = {
-    {LCA_GNSS_LOCATION_INFO_ALTITUDE_MEAN_SEA_LEVEL_BIT, "ALT_SEA_LEVEL"},
-    {LCA_GNSS_LOCATION_INFO_ALTITUDE_MEAN_SEA_LEVEL_BIT, "DOP"},
-    {LCA_GNSS_LOCATION_INFO_MAGNETIC_DEVIATION_BIT, "MAG_DEV"},
-    {LCA_GNSS_LOCATION_INFO_HOR_RELIABILITY_BIT, "HOR_RELIAB"},
-    {LCA_GNSS_LOCATION_INFO_VER_RELIABILITY_BIT, "VER_RELIAB"},
-    {LCA_GNSS_LOCATION_INFO_HOR_ACCURACY_ELIP_SEMI_MAJOR_BIT, "HOR_ACCU_ELIP_SEMI_MAJOR"},
-    {LCA_GNSS_LOCATION_INFO_HOR_ACCURACY_ELIP_SEMI_MINOR_BIT, "HOR_ACCU_ELIP_SEMI_MINOR"},
-    {LCA_GNSS_LOCATION_INFO_HOR_ACCURACY_ELIP_AZIMUTH_BIT, "HOR_ACCU_ELIP_AZIMUTH"},
-    {LCA_GNSS_LOCATION_INFO_GNSS_SV_USED_DATA_BIT, "GNSS_SV_USED"},
-    {LCA_GNSS_LOCATION_INFO_NAV_SOLUTION_MASK_BIT, "NAV_SOLUTION"},
-    {LCA_GNSS_LOCATION_INFO_POS_TECH_MASK_BIT, "POS_TECH"},
-    {LCA_GNSS_LOCATION_INFO_SV_SOURCE_INFO_BIT, "SV_SOURCE"},
-    {LCA_GNSS_LOCATION_INFO_POS_DYNAMICS_DATA_BIT, "POS_DYNAMICS"},
-    {LCA_GNSS_LOCATION_INFO_EXT_DOP_BIT, "EXT_DOP"},
-    {LCA_GNSS_LOCATION_INFO_NORTH_STD_DEV_BIT, "NORTH_STD_DEV"},
-    {LCA_GNSS_LOCATION_INFO_EAST_STD_DEV_BIT, "EAST_STD_DEV"},
-    {LCA_GNSS_LOCATION_INFO_EAST_STD_DEV_BIT, "NORTH_VEL"},
-    {LCA_GNSS_LOCATION_INFO_EAST_VEL_BIT, "EAST_VEL"},
-    {LCA_GNSS_LOCATION_INFO_UP_VEL_BIT, "UP_VEL"},
-    {LCA_GNSS_LOCATION_INFO_NORTH_VEL_UNC_BIT, "NORTH_VEL_UNC"},
-    {LCA_GNSS_LOCATION_INFO_EAST_VEL_UNC_BIT, "EAST_VEL_UNC"},
-    {LCA_GNSS_LOCATION_INFO_UP_VEL_UNC_BIT, "UP_VEL_UNC"},
-    {LCA_GNSS_LOCATION_INFO_LEAP_SECONDS_BIT, "LEAP_SECONDS"},
-    {LCA_GNSS_LOCATION_INFO_TIME_UNC_BIT, "TIME_UNC"},
-    {LCA_GNSS_LOCATION_INFO_NUM_SV_USED_IN_POSITION_BIT, "NUM_SV_USED_IN_FIX"},
-    {LCA_GNSS_LOCATION_INFO_CALIBRATION_CONFIDENCE_PERCENT_BIT, "CAL_CONF_PRECENT"},
-    {LCA_GNSS_LOCATION_INFO_CALIBRATION_STATUS_BIT, "CAL_STATUS"},
-    {LCA_GNSS_LOCATION_INFO_OUTPUT_ENG_TYPE_BIT, "OUTPUT_ENG_TYPE"},
-    {LCA_GNSS_LOCATION_INFO_OUTPUT_ENG_MASK_BIT, "OUTPUT_ENG_MASK"},
-    {LCA_GNSS_LOCATION_INFO_CONFORMITY_INDEX_BIT, "CONFORMITY_INDEX"},
-    {LCA_GNSS_LOCATION_INFO_LLA_VRP_BASED_BIT, "LLA_VRP_BASED"},
-    {LCA_GNSS_LOCATION_INFO_ENU_VELOCITY_VRP_BASED_BIT, "ENU_VELOCITY_VRP_BASED"},
-    {LCA_GNSS_LOCATION_INFO_DR_SOLUTION_STATUS_MASK_BIT, "DR_SOLUTION_STATUS_MASK"},
-    {LCA_GNSS_LOCATION_INFO_ALTITUDE_ASSUMED_BIT, "ALTITUDE_ASSUMED"},
-    {LCA_GNSS_LOCATION_INFO_SESSION_STATUS_BIT, "SESSION_STATUS"},
-    {LCA_GNSS_LOCATION_INFO_INTEGRITY_RISK_USED_BIT, "INTEGRITY_RISK_USED"},
-    {LCA_GNSS_LOCATION_INFO_PROTECT_ALONG_TRACK_BIT, "PROTECT_ALONG_TRACK"},
-    {LCA_GNSS_LOCATION_INFO_PROTECT_CROSS_TRACK_BIT, "PROTECT_CROSS_TRACK"},
-    {LCA_GNSS_LOCATION_INFO_PROTECT_VERTICAL_BIT, "PROTECT_VERTICA"},
-    {LCA_GNSS_LOCATION_INFO_DGNSS_STATION_ID_BIT, "DGNSS_STATION_ID"},
-    {LCA_GNSS_LOCATION_INFO_LEAP_SECONDS_UNC_BIT, "LEAP_SECONDS_UNC"},
-    {LCA_GNSS_LOCATION_INFO_REPORT_INTERVAL_BIT, "REPORT_INTERVAL"},
+// GnssLocationInfoFlagMask
+DECLARE_TBL(GnssLocationInfoFlagMask) = {
+    {GNSS_LOCATION_INFO_ALTITUDE_MEAN_SEA_LEVEL_BIT, "ALT_SEA_LEVEL"},
+    {GNSS_LOCATION_INFO_ALTITUDE_MEAN_SEA_LEVEL_BIT, "DOP"},
+    {GNSS_LOCATION_INFO_MAGNETIC_DEVIATION_BIT, "MAG_DEV"},
+    {GNSS_LOCATION_INFO_HOR_RELIABILITY_BIT, "HOR_RELIAB"},
+    {GNSS_LOCATION_INFO_VER_RELIABILITY_BIT, "VER_RELIAB"},
+    {GNSS_LOCATION_INFO_HOR_ACCURACY_ELIP_SEMI_MAJOR_BIT, "HOR_ACCU_ELIP_SEMI_MAJOR"},
+    {GNSS_LOCATION_INFO_HOR_ACCURACY_ELIP_SEMI_MINOR_BIT, "HOR_ACCU_ELIP_SEMI_MINOR"},
+    {GNSS_LOCATION_INFO_HOR_ACCURACY_ELIP_AZIMUTH_BIT, "HOR_ACCU_ELIP_AZIMUTH"},
+    {GNSS_LOCATION_INFO_GNSS_SV_USED_DATA_BIT, "GNSS_SV_USED"},
+    {GNSS_LOCATION_INFO_NAV_SOLUTION_MASK_BIT, "NAV_SOLUTION"},
+    {GNSS_LOCATION_INFO_POS_TECH_MASK_BIT, "POS_TECH"},
+    {GNSS_LOCATION_INFO_SV_SOURCE_INFO_BIT, "SV_SOURCE"},
+    {GNSS_LOCATION_INFO_POS_DYNAMICS_DATA_BIT, "POS_DYNAMICS"},
+    {GNSS_LOCATION_INFO_EXT_DOP_BIT, "EXT_DOP"},
+    {GNSS_LOCATION_INFO_NORTH_STD_DEV_BIT, "NORTH_STD_DEV"},
+    {GNSS_LOCATION_INFO_EAST_STD_DEV_BIT, "EAST_STD_DEV"},
+    {GNSS_LOCATION_INFO_EAST_STD_DEV_BIT, "NORTH_VEL"},
+    {GNSS_LOCATION_INFO_EAST_VEL_BIT, "EAST_VEL"},
+    {GNSS_LOCATION_INFO_UP_VEL_BIT, "UP_VEL"},
+    {GNSS_LOCATION_INFO_NORTH_VEL_UNC_BIT, "NORTH_VEL_UNC"},
+    {GNSS_LOCATION_INFO_EAST_VEL_UNC_BIT, "EAST_VEL_UNC"},
+    {GNSS_LOCATION_INFO_UP_VEL_UNC_BIT, "UP_VEL_UNC"},
+    {GNSS_LOCATION_INFO_LEAP_SECONDS_BIT, "LEAP_SECONDS"},
+    {GNSS_LOCATION_INFO_TIME_UNC_BIT, "TIME_UNC"},
+    {GNSS_LOCATION_INFO_NUM_SV_USED_IN_POSITION_BIT, "NUM_SV_USED_IN_FIX"},
+    {GNSS_LOCATION_INFO_CALIBRATION_CONFIDENCE_PERCENT_BIT, "CAL_CONF_PRECENT"},
+    {GNSS_LOCATION_INFO_CALIBRATION_STATUS_BIT, "CAL_STATUS"},
+    {GNSS_LOCATION_INFO_OUTPUT_ENG_TYPE_BIT, "OUTPUT_ENG_TYPE"},
+    {GNSS_LOCATION_INFO_OUTPUT_ENG_MASK_BIT, "OUTPUT_ENG_MASK"},
+    {GNSS_LOCATION_INFO_CONFORMITY_INDEX_BIT, "CONFORMITY_INDEX"}
 };
 // LocationReliability
 DECLARE_TBL(LocationReliability) = {
@@ -1208,19 +771,7 @@ DECLARE_TBL(DrCalibrationStatusMask) = {
     {DR_PITCH_CALIBRATION_NEEDED, "PITCH"},
     {DR_YAW_CALIBRATION_NEEDED, "YAW"},
     {DR_ODO_CALIBRATION_NEEDED, "ODO"},
-    {DR_GYRO_CALIBRATION_NEEDED, "GYRO"},
-    {DR_TURN_CALIBRATION_LOW, "TURN_LOW"},
-    {DR_TURN_CALIBRATION_MEDIUM, "TURN_MEDIUM"},
-    {DR_TURN_CALIBRATION_HIGH, "TURN_HIGH"},
-    {DR_LINEAR_ACCEL_CALIBRATION_LOW, "LINEAR_ACCEL_LOW"},
-    {DR_LINEAR_ACCEL_CALIBRATION_MEDIUM, "LINEAR_ACCEL_MEDIUM"},
-    {DR_LINEAR_ACCEL_CALIBRATION_HIGH, "LINEAR_ACCEL_HIGH"},
-    {DR_LINEAR_MOTION_CALIBRATION_LOW, "LINEAR_MOTION_LOW"},
-    {DR_LINEAR_MOTION_CALIBRATION_MEDIUM, "LINEAR_MOTION_MEDIUM"},
-    {DR_LINEAR_MOTION_CALIBRATION_HIGH, "LINEAR_MOTION_HIGH"},
-    {DR_STATIC_CALIBRATION_LOW, "STATIC_LOW"},
-    {DR_STATIC_CALIBRATION_MEDIUM, "STATIC_MEDIUM"},
-    {DR_STATIC_CALIBRATION_HIGH, "STATIC_HIGH"}
+    {DR_GYRO_CALIBRATION_NEEDED, "GYRO"}
 };
 // LocReqEngineTypeMask
 DECLARE_TBL(LocReqEngineTypeMask) = {
@@ -1269,11 +820,9 @@ DECLARE_TBL(GnssMeasurementsDataFlagsMask) = {
     {GNSS_MEASUREMENTS_DATA_MULTIPATH_INDICATOR_BIT, "multipathIndicator"},
     {GNSS_MEASUREMENTS_DATA_SIGNAL_TO_NOISE_RATIO_BIT, "signalToNoiseRatioDb"},
     {GNSS_MEASUREMENTS_DATA_AUTOMATIC_GAIN_CONTROL_BIT, "agcLevelDb"},
-    {GNSS_MEASUREMENTS_DATA_FULL_ISB_BIT, "fullInterSignalBiasNs"},
-    {GNSS_MEASUREMENTS_DATA_FULL_ISB_UNCERTAINTY_BIT, "fullInterSignalBiasUncertaintyNs"},
-    {GNSS_MEASUREMENTS_DATA_CYCLE_SLIP_COUNT_BIT, "cycleSlipCount"},
-    {GNSS_MEASUREMENTS_DATA_GNSS_SIGNAL_TYPE_BIT, "gnssSignalType"},
-    {GNSS_MEASUREMENTS_DATA_BASEBAND_CARRIER_TO_NOISE_BIT, "basebandCarrierToNoiseDbHz"}
+    {GNSS_MEASUREMENTS_DATA_FULL_ISB_BIT, "interSignalBiasNs"},
+    {GNSS_MEASUREMENTS_DATA_FULL_ISB_UNCERTAINTY_BIT, "interSignalBiasUncertaintyNs"},
+    {GNSS_MEASUREMENTS_DATA_CYCLE_SLIP_COUNT_BIT, "cycleSlipCount"}
 };
 // GnssMeasurementsStateMask
 DECLARE_TBL(GnssMeasurementsStateMask) = {
@@ -1296,8 +845,7 @@ DECLARE_TBL(GnssMeasurementsStateMask) = {
 DECLARE_TBL(GnssMeasurementsAdrStateMask) = {
     {GNSS_MEASUREMENTS_ACCUMULATED_DELTA_RANGE_STATE_VALID_BIT, "VALID"},
     {GNSS_MEASUREMENTS_ACCUMULATED_DELTA_RANGE_STATE_RESET_BIT, "RESET"},
-    {GNSS_MEASUREMENTS_ACCUMULATED_DELTA_RANGE_STATE_CYCLE_SLIP_BIT, "CYCLE_SLIP"},
-    {GNSS_MEASUREMENTS_ACCUMULATED_DELTA_RANGE_STATE_HALF_CYCLE_RESOLVED_BIT, "HALF_CYCLE"}
+    {GNSS_MEASUREMENTS_ACCUMULATED_DELTA_RANGE_STATE_CYCLE_SLIP_BIT, "CYCLE_SLIP"}
 };
 // GnssMeasurementsMultipathIndicator
 DECLARE_TBL(GnssMeasurementsMultipathIndicator) = {
@@ -1315,11 +863,7 @@ DECLARE_TBL(GnssMeasurementsClockFlagsMask) = {
     {GNSS_MEASUREMENTS_CLOCK_FLAGS_BIAS_UNCERTAINTY_BIT, "BIAS_UNC"},
     {GNSS_MEASUREMENTS_CLOCK_FLAGS_DRIFT_BIT, "DRIFT"},
     {GNSS_MEASUREMENTS_CLOCK_FLAGS_DRIFT_UNCERTAINTY_BIT, "DRIFT_UNC"},
-    {GNSS_MEASUREMENTS_CLOCK_FLAGS_HW_CLOCK_DISCONTINUITY_COUNT_BIT, "HW_CLK_DISCONTINUITY_CNT"},
-    {GNSS_MEASUREMENTS_CLOCK_FLAGS_ELAPSED_REAL_TIME_BIT, "ELAPSED_REAL_TIME"},
-    {GNSS_MEASUREMENTS_CLOCK_FLAGS_ELAPSED_REAL_TIME_UNC_BIT, "ELAPSED_REAL_TIME_UNC"},
-    {GNSS_MEASUREMENTS_CLOCK_FLAGS_ELAPSED_GPTP_TIME_BIT, "ELAPSED_GPTP_TIME"},
-    {GNSS_MEASUREMENTS_CLOCK_FLAGS_ELAPSED_GPTP_TIME_UNC_BIT, "ELAPSED_GPTP_TIME_UNC"}
+    {GNSS_MEASUREMENTS_CLOCK_FLAGS_HW_CLOCK_DISCONTINUITY_COUNT_BIT, "HW_CLK_DISCONTINUITY_CNT"}
 };
 // LeapSecondSysInfoMask
 DECLARE_TBL(LeapSecondSysInfoMask) = {
@@ -1334,28 +878,7 @@ DECLARE_TBL(LocationSystemInfoMask) = {
 // LocationSystemInfoMask
 DECLARE_TBL(DrSolutionStatusMask) = {
     {DR_SOLUTION_STATUS_VEHICLE_SENSOR_SPEED_INPUT_DETECTED, "VEHICLE_SENSOR_SPEED_INPUT_DETECTED"},
-    {DR_SOLUTION_STATUS_VEHICLE_SENSOR_SPEED_INPUT_USED, "VEHICLE_SENSOR_SPEED_INPUT_USED"},
-    {DR_SOLUTION_STATUS_WARNING_UNCALIBRATED, "WARNING_UNCALIBRATED"},
-    {DR_SOLUTION_STATUS_WARNING_GNSS_QUALITY_INSUFFICIENT, "WARNING_GNSS_QUALITY_INSUFFICIENT"},
-    {DR_SOLUTION_STATUS_WARNING_FERRY_DETECTED, "WARNING_FERRY_DETECTED"},
-    {DR_SOLUTION_STATUS_ERROR_6DOF_SENSOR_UNAVAILABLE, "ERROR_6DOF_SENSOR_UNAVAILABLE"},
-    {DR_SOLUTION_STATUS_ERROR_VEHICLE_SPEED_UNAVAILABLE, "ERROR_VEHICLE_SPEED_UNAVAILABLE"},
-    {DR_SOLUTION_STATUS_ERROR_GNSS_EPH_UNAVAILABLE, "ERROR_GNSS_EPH_UNAVAILABLE"},
-    {DR_SOLUTION_STATUS_ERROR_GNSS_MEAS_UNAVAILABLE, "ERROR_GNSS_MEAS_UNAVAILABLE"},
-    {DR_SOLUTION_STATUS_WARNING_INIT_POSITION_INVALID, "WARNING_INIT_POSITION_INVALID"},
-    {DR_SOLUTION_STATUS_WARNING_INIT_POSITION_UNRELIABLE, "WARNING_INIT_POSITION_UNRELIABLE"},
-    {DR_SOLUTION_STATUS_WARNING_POSITON_UNRELIABLE, "WARNING_POSITON_UNRELIABLE"},
-    {DR_SOLUTION_STATUS_ERROR_GENERIC, "ERROR_GENERIC"},
-    {DR_SOLUTION_STATUS_WARNING_SENSOR_TEMP_OUT_OF_RANGE, "WARNING_SENSOR_TEMP_OUT_OF_RANGE"},
-    {DR_SOLUTION_STATUS_WARNING_USER_DYNAMICS_INSUFFICIENT, "WARNING_USER_DYNAMICS_INSUFFICIENT"},
-    {DR_SOLUTION_STATUS_WARNING_FACTORY_DATA_INCONSISTENT, "WARNING_FACTORY_DATA_INCONSISTENT"},
-    {DR_SOLUTION_STATUS_WARNING_MMF_UNAVAILABLE, "WARNING_MMF_UNAVAILABLE"},
-    {DR_SOLUTION_STATUS_WARNING_MMF_NOT_USABLE, "MMF_NOT_USABLE"},
-};
-
-DECLARE_TBL(GnssDcReportType) = {
-    {QZSS_JMA_DISASTER_PREVENTION_INFO, "QZSS_JMA_DISASTER_PREVENTION_INFO"},
-    {QZSS_NON_JMA_DISASTER_PREVENTION_INFO, "QZSS_NON_JMA_DISASTER_PREVENTION_INFO"}
+    {DR_SOLUTION_STATUS_VEHICLE_SENSOR_SPEED_INPUT_USED, "VEHICLE_SENSOR_SPEED_INPUT_USED"}
 };
 
 string LocationClientApi::capabilitiesToString(LocationCapabilitiesMask capabMask) {
@@ -1484,7 +1007,7 @@ string GnssSystemTime::toString() const {
     case GNSS_LOC_SV_SYSTEM_NAVIC:
         return u.navicSystemTime.toString();
     default:
-        return "Unknown System ID: " + to_string(gnssSystemTimeSrc);
+        return "Unknown System ID: " + std::to_string(gnssSystemTimeSrc);
     }
 }
 
@@ -1499,7 +1022,7 @@ string LLAInfo::toString() const {
 
 string Location::toString() const {
     string out;
-    out.reserve(512);
+    out.reserve(256);
 
     out += FIELDVAL_MASK(flags, LocationFlagsMask_tbl);
     out += FIELDVAL_DEC(timestamp);
@@ -1513,9 +1036,7 @@ string Location::toString() const {
     out += FIELDVAL_DEC(speedAccuracy);
     out += FIELDVAL_DEC(bearingAccuracy);
     out += FIELDVAL_MASK(techMask, LocationTechnologyMask_tbl);
-    out += FIELDVAL_DEC(elapsedgPTPTime);
-    out += FIELDVAL_DEC(elapsedgPTPTimeUnc);
-    out += FIELDVAL_MASK(sessionStatus, LocSessionStatus_tbl);
+
     return out;
 }
 
@@ -1524,7 +1045,7 @@ string GnssLocation::toString() const {
     out.reserve(8096);
 
     out += Location::toString();
-    out += FIELDVAL_MASK(gnssInfoFlags, LCAGnssLocationInfoFlagMask_tbl);
+    out += FIELDVAL_MASK(gnssInfoFlags, GnssLocationInfoFlagMask_tbl);
     out += FIELDVAL_DEC(altitudeMeanSeaLevel);
     out += FIELDVAL_DEC(pdop);
     out += FIELDVAL_DEC(hdop);
@@ -1572,27 +1093,8 @@ string GnssLocation::toString() const {
     out += FIELDVAL_DEC(enuVelocityVRPBased[1]);
     out += FIELDVAL_DEC(enuVelocityVRPBased[2]);
     out += FIELDVAL_MASK(drSolutionStatusMask, DrSolutionStatusMask_tbl);
-    out += FIELDVAL_DEC(altitudeAssumed);
     out += FIELDVAL_MASK(sessionStatus, LocSessionStatus_tbl);
-    out += FIELDVAL_DEC(integrityRiskUsed);
-    out += FIELDVAL_DEC(protectAlongTrack);
-    out += FIELDVAL_DEC(protectCrossTrack);
-    out += FIELDVAL_DEC(protectVertical);
-    out += FIELDVAL_DEC(elapsedRealTimeNs);
-    out += FIELDVAL_DEC(elapsedRealTimeUncNs);
-    out += FIELDVAL_DEC(timeUncMs);
-    uint32_t count = 0;
-    for (auto dgnssId : dgnssStationId) {
-        out += "dgnssStationId[";
-        out += to_string(count);
-        out += "]: ";
-        out += to_string(dgnssId);
-        count++;
-    }
-    out += FIELDVAL_DEC(baseLineLength);
-    out += FIELDVAL_DEC(ageMsecOfCorrections);
-    out += FIELDVAL_DEC(leapSecondsUnc);
-    out += FIELDVAL_DEC(posReportingInterval);
+
     return out;
 }
 
@@ -1624,9 +1126,6 @@ string GnssData::toString() const {
         out += FIELDVAL_DEC(jammerInd[i]);
         out += FIELDVAL_DEC(agc[i]);
     }
-    out += FIELDVAL_DEC(agcStatusL1);
-    out += FIELDVAL_DEC(agcStatusL2);
-    out += FIELDVAL_DEC(agcStatusL5);
 
     return out;
 }
@@ -1658,12 +1157,10 @@ string GnssMeasurementsData::toString() const {
     out += FIELDVAL_DEC(agcLevelDb);
     out += FIELDVAL_DEC(basebandCarrierToNoiseDbHz);
     out += FIELDVAL_MASK(gnssSignalType, GnssSignalTypeMask_tbl);
-    out += FIELDVAL_DEC(fullInterSignalBiasNs);
-    out += FIELDVAL_DEC(fullInterSignalBiasUncertaintyNs);
+    out += FIELDVAL_DEC(interSignalBiasNs);
+    out += FIELDVAL_DEC(interSignalBiasUncertaintyNs);
     out += FIELDVAL_DEC(cycleSlipCount);
-    out += FIELDVAL_DEC(basebandCarrierToNoiseDbHz);
-    out += FIELDVAL_DEC(measCodeType);
-    out += otherCodeTypeName;
+
     return out;
 }
 
@@ -1681,10 +1178,6 @@ string GnssMeasurementsClock::toString() const {
     out += FIELDVAL_DEC(driftNsps);
     out += FIELDVAL_DEC(driftUncertaintyNsps);
     out += FIELDVAL_DEC(hwClockDiscontinuityCount);
-    out += FIELDVAL_DEC(elapsedRealTime);
-    out += FIELDVAL_DEC(elapsedRealTimeUnc);
-    out += FIELDVAL_DEC(elapsedgPTPTime);
-    out += FIELDVAL_DEC(elapsedgPTPTimeUnc);
 
     return out;
 }
@@ -1700,9 +1193,6 @@ string GnssMeasurements::toString() const {
     }
 
     out += FIELDVAL_DEC(isNhz);
-    out += FIELDVAL_DEC(agcStatusL1);
-    out += FIELDVAL_DEC(agcStatusL2);
-    out += FIELDVAL_DEC(agcStatusL5);
     return out;
 }
 
@@ -1734,293 +1224,6 @@ string LocationSystemInfo::toString() const {
     out += FIELDVAL_MASK(systemInfoMask, LocationSystemInfoMask_tbl);
     out += leapSecondSysInfo.toString();
 
-    return out;
-}
-
-string GnssDcReport::toString() const {
-    string out;
-    out.reserve(256);
-
-    out += FIELDVAL_ENUM(dcReportType, GnssDcReportType_tbl);
-    out += FIELDVAL_DEC(numValidBits);
-
-    size_t bufSize = dcReportData.size() * 5 + 1;
-    char *ptr = (char*) malloc(bufSize);
-
-    if (ptr != NULL) {
-        char *ptrCopy = ptr;
-        for (uint8_t byte : dcReportData) {
-            int numbytes = snprintf(ptrCopy, bufSize, "0x%02X ", byte);
-            ptrCopy += numbytes;
-        }
-        *ptrCopy = '\0';
-        out.append(ptr);
-
-        free(ptr);
-    }
-    out += FIELDVAL_DEC(prnValid);
-    out += FIELDVAL_DEC(prn);
-    return out;
-}
-
-DECLARE_TBL(GnssEphSource) = {
-    {GNSS_EPH_SRC_UNKNOWN, "SRC_UNKNOWN"},
-    {GNSS_EPH_SRC_OTA, "SRC_OTA"},
-    {GNSS_EPH_SRC_MAX, "SRC_MAX"},
-};
-
-DECLARE_TBL(GnssEphAction) = {
-    {GNSS_EPH_ACTION_UNKNOWN, "ACTION_UNKNOWN"},
-    {GNSS_EPH_ACTION_UPDATE, "ACTION_UPDATE"},
-    {GNSS_EPH_ACTION_DELETE, "ACTION_DELETE"},
-    {GNSS_EPH_ACTION_MAX, "ACTION_MAX"}
-};
-
-DECLARE_TBL(GalEphSignalSource) = {
-    {GAL_EPH_SIGNAL_SRC_UNKNOWN, "UNKNOWN"},
-    {GAL_EPH_SIGNAL_SRC_E1B, "SRC_E1B"},
-    {GAL_EPH_SIGNAL_SRC_E5A, "SRC_E5A"},
-    {GAL_EPH_SIGNAL_SRC_E5B, "SRC_E5B"}
-};
-
-string GnssEphCommonInfo::toString() const {
-    string out;
-    out.reserve(8096);
-    out += FIELDVAL_DEC(gnssSvId);
-    out += FIELDVAL_DEC(ephSource);
-    out += FIELDVAL_DEC(action);
-    out += FIELDVAL_DEC(IODE);
-    out += FIELDVAL_DEC(aSqrt);
-    out += FIELDVAL_DEC(deltaN);
-    out += FIELDVAL_DEC(m0);
-    out += FIELDVAL_DEC(eccentricity);
-    out += FIELDVAL_DEC(omega0);
-    out += FIELDVAL_DEC(i0);
-    out += FIELDVAL_DEC(omega);
-    out += FIELDVAL_DEC(omegaDot);
-    out += FIELDVAL_DEC(iDot);
-    out += FIELDVAL_DEC(cUc);
-    out += FIELDVAL_DEC(cUs);
-    out += FIELDVAL_DEC(cRc);
-    out += FIELDVAL_DEC(cRs);
-    out += FIELDVAL_DEC(cIc);
-    out += FIELDVAL_DEC(cIs);
-    out += FIELDVAL_DEC(toe);
-    out += FIELDVAL_DEC(toc);
-    out += FIELDVAL_DEC(af0);
-    out += FIELDVAL_DEC(af1);
-    out += FIELDVAL_DEC(af2);
-    return out;
-}
-
-string GpsQzssExtEphemeris::toString() const {
-    string out;
-    out.reserve(4096);
-    out += FIELDVAL_DEC(gnssSvId);
-    out += FIELDVAL_DEC(validityMask);
-    out += FIELDVAL_DEC(iscL1ca);
-    out += FIELDVAL_DEC(iscL2c);
-    out += FIELDVAL_DEC(iscL5I5);
-    out += FIELDVAL_DEC(iscL5Q5);
-    out += FIELDVAL_DEC(alert);
-    out += FIELDVAL_DEC(uraNed0);
-    out += FIELDVAL_DEC(uraNed1);
-    out += FIELDVAL_DEC(uraNed2);
-    out += FIELDVAL_DEC(top);
-    out += FIELDVAL_DEC(topClock);
-    out += FIELDVAL_DEC(validityPeriod);
-    out += FIELDVAL_DEC(deltaNdot);
-    out += FIELDVAL_DEC(deltaA);
-    out += FIELDVAL_DEC(adot);
-    return out;
-}
-
-string GpsQzssEphemeris::toString() const {
-
-    string out;
-    out.reserve(4096);
-    out += commonEphemerisData.toString();
-    out += FIELDVAL_DEC(signalHealth);
-    out += FIELDVAL_DEC(URAI);
-    out += FIELDVAL_DEC(codeL2);
-    out += FIELDVAL_DEC(dataFlagL2P);
-    out += FIELDVAL_DEC(tgd);
-    out += FIELDVAL_DEC(fitInterval);
-    out += FIELDVAL_DEC(IODC);
-    out += FIELDVAL_DEC(extendedEphDataValidity);
-    out += gpsQzssExtEphData.toString();
-    return out;
-}
-
-string GlonassEphemeris::toString() const {
-
-    string out;
-    out.reserve(256);
-    out += FIELDVAL_DEC(gnssSvId);
-    out += FIELDVAL_DEC(ephSource);
-    out += FIELDVAL_DEC(action);
-    out += FIELDVAL_DEC(bnHealth);
-    out += FIELDVAL_DEC(lnHealth);
-    out += FIELDVAL_DEC(tb);
-    out += FIELDVAL_DEC(ft);
-    out += FIELDVAL_DEC(gloM);
-    out += FIELDVAL_DEC(enAge);
-    out += FIELDVAL_DEC(gloFrequency);
-    out += FIELDVAL_DEC(p1);
-    out += FIELDVAL_DEC(p2);
-    out += FIELDVAL_DEC(deltaTau);
-    out += FIELDVAL_DEC(position[0]);
-    out += FIELDVAL_DEC(position[1]);
-    out += FIELDVAL_DEC(position[2]);
-    out += FIELDVAL_DEC(velocity[0]);
-    out += FIELDVAL_DEC(velocity[1]);
-    out += FIELDVAL_DEC(velocity[2]);
-    out += FIELDVAL_DEC(acceleration[0]);
-    out += FIELDVAL_DEC(acceleration[1]);
-    out += FIELDVAL_DEC(acceleration[2]);
-    out += FIELDVAL_DEC(tauN);
-    out += FIELDVAL_DEC(gamma);
-    out += FIELDVAL_DEC(toe);
-    out += FIELDVAL_DEC(nt);
-    return out;
-}
-
-string BdsExtEphemeris::toString() const {
-
-    string out;
-    out.reserve(4096);
-    out += FIELDVAL_DEC(gnssSvId);
-    out += FIELDVAL_DEC(validityMask);
-    out += FIELDVAL_DEC(svType);
-    out += FIELDVAL_DEC(tgdB2a);
-    out += FIELDVAL_DEC(iscB2a);
-    out += FIELDVAL_DEC(tgdB1c);
-    out += FIELDVAL_DEC(iscB1c);
-    out += FIELDVAL_DEC(validityPeriod);
-    out += FIELDVAL_DEC(integrityFlags);
-    out += FIELDVAL_DEC(deltaNdot);
-    out += FIELDVAL_DEC(deltaA);
-    out += FIELDVAL_DEC(adot);
-    return out;
-}
-
-string BdsEphemeris::toString() const {
-
-    string out;
-    out.reserve(4096);
-    out += commonEphemerisData.toString();
-    out += FIELDVAL_DEC(svHealth);
-    out += FIELDVAL_DEC(AODC);
-    out += FIELDVAL_DEC(tgd1);
-    out += FIELDVAL_DEC(tgd2);
-    out += FIELDVAL_DEC(URAI);
-    out += FIELDVAL_DEC(extendedEphDataValidity);
-    out += bdsExtEphData.toString();
-    return out;
-}
-
-string GalileoEphemeris::toString() const {
-
-    string out;
-    out.reserve(256);
-    out += commonEphemerisData.toString();
-    out += FIELDVAL_DEC(dataSourceSignal);
-    out += FIELDVAL_DEC(sisIndex);
-    out += FIELDVAL_DEC(bgdE1E5a);
-    out += FIELDVAL_DEC(bgdE1E5b);
-    out += FIELDVAL_DEC(svHealth);
-    return out;
-}
-
-string QzssEphemeris::toString() const {
-    string out;
-    out.reserve(256);
-    out += qzssEphData.toString();
-    return out;
-}
-
-string NavicEphemeris::toString() const {
-
-    string out;
-    out.reserve(256);
-    out += commonEphemerisData.toString();
-    out += FIELDVAL_DEC(weekNum);
-    out += FIELDVAL_DEC(iodec);
-    out += FIELDVAL_DEC(l5Health);
-    out += FIELDVAL_DEC(sHealth);
-    out += FIELDVAL_DEC(inclinationAngleRad);
-    out += FIELDVAL_DEC(urai);
-    out += FIELDVAL_DEC(tgd);
-    return out;
-}
-
-string GnssEphemeris::toString() const {
-    string out;
-    out.reserve(8192);
-
-    out += FIELDVAL_ENUM(gnssConstellation, Gnss_LocSvSystemEnumType_tbl);
-    out += FIELDVAL_DEC(isSystemTimeValid);
-    out += systemTime.toString();
-
-    uint32_t ind = 0;
-    switch (gnssConstellation) {
-        case GNSS_LOC_SV_SYSTEM_GPS:
-            for (auto eph : gpsEphemerisData) {
-                out += "gpsEphemerisData[";
-                out += to_string(ind);
-                out += "]: ";
-                out += eph.toString();
-                ind++;
-            }
-            break;
-        case GNSS_LOC_SV_SYSTEM_GALILEO:
-            for (auto eph : galEphemerisData) {
-                out += "galileoEphemerisData[";
-                out += to_string(ind);
-                out += "]: ";
-                out += eph.toString();
-                ind++;
-            }
-            break;
-        case GNSS_LOC_SV_SYSTEM_GLONASS:
-            for (auto eph : gloEphemerisData) {
-                out += "glonassEphemerisData[";
-                out += to_string(ind);
-                out += "]: ";
-                out += eph.toString();
-                ind++;
-            }
-            break;
-        case GNSS_LOC_SV_SYSTEM_BDS:
-            for (auto eph : bdsEphemerisData) {
-                out += "bdsEphemerisData[";
-                out += to_string(ind);
-                out += "]: ";
-                out += eph.toString();
-                ind++;
-            }
-            break;
-        case GNSS_LOC_SV_SYSTEM_QZSS:
-            for (auto eph : qzssEphemerisData) {
-                out += "qzssEphemerisData[";
-                out += to_string(ind);
-                out += "]: ";
-                out += eph.toString();
-                ind++;
-            }
-            break;
-        case GNSS_LOC_SV_SYSTEM_NAVIC:
-            for (auto eph : navicEphemerisData) {
-                out += "navicEphemerisData[";
-                out += to_string(ind);
-                out += "]: ";
-                out += eph.toString();
-                ind++;
-            }
-            break;
-    }
-    out += FIELDVAL_DEC(validDataSourceSignal);
-    out += FIELDVAL_DEC(dataSourceSignal);
     return out;
 }
 
