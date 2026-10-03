@@ -614,34 +614,34 @@ LocApiV02 :: open(LOC_API_ADAPTER_EVENT_MASK_T mask)
                     LOC_LOGD("%s:%d]: Query AON config succeeded. aonCapability is %d.\n",
                              __func__, __LINE__, queryAonConfigInd.aonCapability);
                     if (queryAonConfigInd.aonCapability_valid) {
-                        if (queryAonConfigInd.aonCapability |
+                        if (queryAonConfigInd.aonCapability &
                             QMI_LOC_MASK_AON_TIME_BASED_BATCHING_SUPPORTED_V02) {
                             LOC_LOGD("%s:%d]: LB 1.0 is supported.\n", __func__, __LINE__);
                         }
-                        if (queryAonConfigInd.aonCapability |
+                        if (queryAonConfigInd.aonCapability &
                             QMI_LOC_MASK_AON_AUTO_BATCHING_SUPPORTED_V02) {
                             LOC_LOGD("%s:%d]: LB 1.5 is supported.\n", __func__, __LINE__);
                             supportedMsgList |=
                                 (1 << LOC_API_ADAPTER_MESSAGE_ADAPTIVE_LOCATION_BATCHING);
                         }
-                        if (queryAonConfigInd.aonCapability |
+                        if (queryAonConfigInd.aonCapability &
                             QMI_LOC_MASK_AON_DISTANCE_BASED_BATCHING_SUPPORTED_V02) {
                             LOC_LOGD("%s:%d]: LB 2.0 is supported.\n", __func__, __LINE__);
                             supportedMsgList |=
                                 (1 << LOC_API_ADAPTER_MESSAGE_DISTANCE_BASE_LOCATION_BATCHING);
                         }
-                        if (queryAonConfigInd.aonCapability |
+                        if (queryAonConfigInd.aonCapability &
                             QMI_LOC_MASK_AON_DISTANCE_BASED_TRACKING_SUPPORTED_V02) {
                             LOC_LOGD("%s:%d]: DBT 2.0 is supported.\n", __func__, __LINE__);
                         }
-                        if (queryAonConfigInd.aonCapability |
+                        if (queryAonConfigInd.aonCapability &
                             QMI_LOC_MASK_AON_UPDATE_TBF_SUPPORTED_V02) {
                             LOC_LOGD("%s:%d]: Updating tracking TBF on the fly is supported.\n",
                                      __func__, __LINE__);
                             supportedMsgList |=
                                 (1 << LOC_API_ADAPTER_MESSAGE_UPDATE_TBF_ON_THE_FLY);
                         }
-                        if (queryAonConfigInd.aonCapability |
+                        if (queryAonConfigInd.aonCapability &
                             QMI_LOC_MASK_AON_OUTDOOR_TRIP_BATCHING_SUPPORTED_V02) {
                             LOC_LOGD("%s:%d]: OTB is supported.\n",
                                      __func__, __LINE__);
